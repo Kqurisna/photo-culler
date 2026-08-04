@@ -570,7 +570,6 @@ function App() {
   const swipeProgress = Math.max(-1, Math.min(1, dragX / SWIPE_THRESHOLD));
   const rotation = swipeProgress * 8;
   const isExiting = exitDir !== null;
-  const trayLayers = Math.min(selectedCount, 3);
   const percentDone = totalLoaded
     ? Math.round(((frameNumber - 1) / totalLoaded) * 100)
     : 0;
