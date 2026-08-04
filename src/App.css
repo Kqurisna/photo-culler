@@ -1303,3 +1303,68 @@ button:disabled {
     transition: none !important;
   }
 }
+.tray-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.tray-dropdown-item:hover {
+  background: var(--surface-sunken);
+}
+
+.tray-dropdown-item-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tray-dropdown-item-main:hover {
+  border-color: transparent;
+}
+
+.tray-dropdown-item-delete {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin-right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.tray-dropdown-item-delete:hover:not(:disabled) {
+  color: var(--reject);
+  border-color: var(--reject);
+  background: var(--reject-soft);
+}
+
+.photo-lightbox-remove {
+  margin-top: 12px;
+  border-color: var(--reject);
+  color: var(--reject);
+}
+
+.photo-lightbox-remove:hover:not(:disabled) {
+  background: var(--reject-soft);
+  border-color: var(--reject);
+}

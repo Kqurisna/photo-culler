@@ -260,7 +260,39 @@ function App() {
       setIsProcessing(false);
     }
   }, [destFolder, sourceFolder, isProcessing, exitDir, pushToast]);
-
+  // --- Remove a photo from the selected tray: moves it back from
+  // destFolder to sourceFolder and puts it back at the front of the
+  // queue, regardless of whether it was the most recent selection. ---
+  const handleRemoveSelected = useCallback(
+    async (photo: PhotoEntry) => {
+      if (isProcessing) return;
+      setIsProcessing(true);
+      try {
+        await invoke("move_photo", {
+          source: `${destFolder}/${photo.name}`.replace(/\/+/g, "/"),
+          destFolder: sourceFolder,
+        });
+        setSelectedCount((c) => Math.max(0, c - 1));
+        setSelectedPhotos((prev) => prev.filter((p) => p.path !== photo.path));
+        setQueue((prev) => [
+          photo,
+          ...prev.filter((p) => p.path !== photo.path),
+        ]);
+        // Drop the matching "select" entry from history so undo doesn't
+        // later try to reverse a selection that's already been removed.
+        history.current = history.current.filter(
+          (h) => !(h.type === "select" && h.photo.path === photo.path),
+        );
+        setCanUndo(history.current.length > 0);
+        if (viewingPhoto?.path === photo.path) setViewingPhoto(null);
+      } catch (e) {
+        pushToast(`Gagal menghapus: ${String(e)}`);
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [destFolder, sourceFolder, isProcessing, viewingPhoto, pushToast],
+  );
   // --- Fullscreen / immersive mode: hides the surrounding chrome and lets
   // the print fill the window. Also asks the OS window to go fullscreen
   // where that API is available; falls back to the in-app layout only. ---
@@ -877,21 +909,35 @@ function App() {
               {selectedPhotos.map((p) => {
                 const thumb = previewCache.current.get(p.path);
                 return (
-                  <button
-                    type="button"
-                    className="tray-dropdown-item"
-                    key={p.path}
-                    onClick={() => setViewingPhoto(p)}
-                  >
-                    <div className="tray-thumb">
-                      {thumb ? (
-                        <img src={thumb} alt={p.name} />
-                      ) : (
-                        <span className="tray-thumb-fallback mono">IMG</span>
-                      )}
-                    </div>
-                    <span className="tray-dropdown-name mono">{p.name}</span>
-                  </button>
+                  <div className="tray-dropdown-item" key={p.path}>
+                    <button
+                      type="button"
+                      className="tray-dropdown-item-main"
+                      onClick={() => setViewingPhoto(p)}
+                    >
+                      <div className="tray-thumb">
+                        {thumb ? (
+                          <img src={thumb} alt={p.name} />
+                        ) : (
+                          <span className="tray-thumb-fallback mono">IMG</span>
+                        )}
+                      </div>
+                      <span className="tray-dropdown-name mono">{p.name}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="tray-dropdown-item-delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveSelected(p);
+                      }}
+                      disabled={isProcessing}
+                      title="Hapus dari terpilih"
+                      aria-label={`Hapus ${p.name} dari terpilih`}
+                    >
+                      ×
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -932,6 +978,14 @@ function App() {
               )}
             </div>
             <p className="photo-lightbox-caption mono">{viewingPhoto.name}</p>
+            <button
+              type="button"
+              className="photo-lightbox-remove"
+              onClick={() => handleRemoveSelected(viewingPhoto)}
+              disabled={isProcessing}
+            >
+              Hapus dari Terpilih
+            </button>{" "}
           </div>
         </div>
       )}
