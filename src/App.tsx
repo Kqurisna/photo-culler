@@ -3,10 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
+import PdfViewer from "./components/media/PdfViewer";
 
+type PhotoKind = "image" | "pdf";
 type PhotoEntry = {
   path: string;
   name: string;
+  kind: PhotoKind;
 };
 
 type Stage = "setup" | "sorting" | "done";
@@ -84,7 +87,7 @@ function App() {
 
   // A photo from the dropdown currently shown large in the lightbox.
   const [viewingPhoto, setViewingPhoto] = useState<PhotoEntry | null>(null);
-
+  const [fullViewPhoto, setFullViewPhoto] = useState<PhotoEntry | null>(null);
   // --- Toasts (replace inline red text with a stack that self-clears) ---
   const pushToast = useCallback((message: string) => {
     const id = ++toastId;
@@ -140,12 +143,20 @@ function App() {
   };
 
   // --- Load preview untuk foto di posisi paling depan queue ---
+  // PDF tidak lewat get_preview (backend sengaja menolaknya) — PdfViewer
+  // merender PDF sendiri lewat pdfjs-dist + convertFileSrc.
   useEffect(() => {
     if (stage !== "sorting" || queue.length === 0) {
       setPreviewSrc("");
       return;
     }
     const current = queue[0];
+
+    if (current.kind === "pdf") {
+      setPreviewSrc("");
+      setLoadingPreview(false);
+      return;
+    }
 
     const cached = previewCache.current.get(current.path);
     if (cached) {
@@ -171,7 +182,7 @@ function App() {
 
     // prefetch the next couple of frames so the swipe never stalls on load
     queue.slice(1, 3).forEach((p) => {
-      if (!previewCache.current.has(p.path)) {
+      if (p.kind !== "pdf" && !previewCache.current.has(p.path)) {
         invoke<string>("get_preview", { path: p.path })
           .then((dataUrl) => previewCache.current.set(p.path, dataUrl))
           .catch(() => {});
@@ -704,7 +715,7 @@ function App() {
                 </div>
               )}
 
-              {!loadingPreview && previewSrc && (
+              {!loadingPreview && (previewSrc || current?.kind === "pdf") && (
                 <div
                   className={
                     "preview-card" +
@@ -727,12 +738,16 @@ function App() {
                   onAnimationEnd={handleExitAnimationEnd}
                 >
                   <div className="preview-photo-inner">
-                    <img
-                      src={previewSrc}
-                      alt={current?.name}
-                      className="preview-img"
-                      draggable={false}
-                    />
+                    {current?.kind === "pdf" ? (
+                      <PdfViewer path={current.path} compact />
+                    ) : (
+                      <img
+                        src={previewSrc}
+                        alt={current?.name}
+                        className="preview-img"
+                        draggable={false}
+                      />
+                    )}
                   </div>
                   {current && (
                     <span className="frame-counter mono">
@@ -803,6 +818,16 @@ function App() {
             >
               ← Lewati
             </button>
+            {current && current.kind === "pdf" && (
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => setFullViewPhoto(current)}
+                disabled={isExiting}
+              >
+                Lihat PDF
+              </button>
+            )}
             <button
               className="select-btn"
               onClick={() => triggerExit("right")}
@@ -916,7 +941,9 @@ function App() {
                       onClick={() => setViewingPhoto(p)}
                     >
                       <div className="tray-thumb">
-                        {thumb ? (
+                        {p.kind === "pdf" ? (
+                          <span className="tray-thumb-fallback mono">PDF</span>
+                        ) : thumb ? (
                           <img src={thumb} alt={p.name} />
                         ) : (
                           <span className="tray-thumb-fallback mono">IMG</span>
@@ -944,6 +971,34 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* PDF full viewer — dibuka dari tombol "Lihat PDF" */}
+      {fullViewPhoto && (
+        <div
+          className="photo-lightbox"
+          onClick={() => setFullViewPhoto(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="photo-lightbox-card pdf-lightbox-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="photo-lightbox-close"
+              onClick={() => setFullViewPhoto(null)}
+              aria-label="Tutup"
+            >
+              ×
+            </button>
+            <div className="pdf-lightbox-viewer-wrap">
+              <PdfViewer path={fullViewPhoto.path} />
+            </div>
+            <p className="photo-lightbox-caption mono">{fullViewPhoto.name}</p>
+          </div>
+        </div>
+      )}
 
       {/* Lightbox: a larger look at a photo picked from the tray dropdown. */}
       {viewingPhoto && (

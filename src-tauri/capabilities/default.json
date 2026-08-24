@@ -7,9 +7,19 @@
   ],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
     "opener:default",
     "dialog:default",
     "fs:default",
+    "fs:allow-read-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
     "shell:default"
   ]
 }

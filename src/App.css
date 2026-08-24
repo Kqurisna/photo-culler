@@ -1368,3 +1368,143 @@ button:disabled {
   background: var(--reject-soft);
   border-color: var(--reject);
 }
+
+/* ---------- PDF Viewer ---------- */
+
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  gap: 8px;
+}
+
+.pdf-canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+}
+
+.pdf-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  box-shadow: 0 2px 10px rgba(20, 20, 15, 0.12);
+  background: #fff;
+}
+
+.pdf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.pdf-toolbar-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border-strong);
+  margin: 0 2px;
+}
+
+.pdf-page-label,
+.pdf-zoom-label {
+  min-width: 44px;
+  text-align: center;
+}
+
+.pdf-viewer-loading,
+.pdf-viewer-error {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pdf-viewer-compact .pdf-toolbar {
+  transform: scale(0.9);
+}
+
+/* ---------- PDF Viewer: mode full (scroll + fullscreen) ---------- */
+
+.pdf-viewer-full {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface-sunken);
+}
+
+.pdf-viewer-full.is-fullscreen {
+  background: var(--bg);
+  padding: 16px 0;
+}
+
+.pdf-full-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.pdf-full-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 12px 32px;
+}
+
+.pdf-full-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pdf-full-page .pdf-canvas {
+  box-shadow: 0 2px 14px rgba(20, 20, 15, 0.16);
+  background: #fff;
+  max-width: 100%;
+}
+
+.pdf-full-page-num {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.pdf-lightbox-card {
+  width: min(94vw, 900px);
+  height: min(92vh, 1100px);
+  padding: 0;
+  overflow: hidden;
+}
+
+.pdf-lightbox-card .photo-lightbox-caption {
+  padding: 8px 16px;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.pdf-lightbox-viewer-wrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+}

@@ -8,14 +8,26 @@ use base64::{engine::general_purpose, Engine as _};
 struct PhotoEntry {
     path: String,
     name: String,
+    kind: String, // "image" | "pdf"
 }
 
 const RAW_HEIC_EXT: &[&str] = &[
     "heic", "heif", "cr2", "cr3", "nef", "arw", "dng", "orf", "rw2", "raf",
 ];
 const STANDARD_EXT: &[&str] = &["jpg", "jpeg", "png", "tiff", "tif", "bmp"];
+const PDF_EXT: &[&str] = &["pdf"];
 
-// 1. List semua foto di folder yang dipilih
+fn kind_for_ext(ext: &str) -> Option<&'static str> {
+    if STANDARD_EXT.contains(&ext) || RAW_HEIC_EXT.contains(&ext) {
+        Some("image")
+    } else if PDF_EXT.contains(&ext) {
+        Some("pdf")
+    } else {
+        None
+    }
+}
+
+// 1. List semua foto + PDF di folder yang dipilih
 #[tauri::command]
 fn list_photos(folder: String) -> Result<Vec<PhotoEntry>, String> {
     let mut entries: Vec<PhotoEntry> = Vec::new();
@@ -31,9 +43,7 @@ fn list_photos(folder: String) -> Result<Vec<PhotoEntry>, String> {
         if path.is_file() {
             if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                 let ext_lower = ext.to_lowercase();
-                if STANDARD_EXT.contains(&ext_lower.as_str())
-                    || RAW_HEIC_EXT.contains(&ext_lower.as_str())
-                {
+                if let Some(kind) = kind_for_ext(&ext_lower) {
                     entries.push(PhotoEntry {
                         path: path.to_string_lossy().to_string(),
                         name: path
@@ -41,6 +51,7 @@ fn list_photos(folder: String) -> Result<Vec<PhotoEntry>, String> {
                             .unwrap_or_default()
                             .to_string_lossy()
                             .to_string(),
+                        kind: kind.to_string(),
                     });
                 }
             }
@@ -51,8 +62,11 @@ fn list_photos(folder: String) -> Result<Vec<PhotoEntry>, String> {
     Ok(entries)
 }
 
-// 2. Generate preview base64 JPG dari foto apapun (pakai `sips`, native macOS)
-//    Untuk JPG/PNG kecil, langsung baca saja tanpa convert supaya cepat.
+// 2. Generate preview base64 JPG.
+//    Untuk PDF: kita TIDAK render di sini (itu tugas PdfViewer di frontend
+//    lewat pdfjs-dist + convertFileSrc). Fungsi ini mengembalikan error
+//    khusus supaya App.tsx tahu harus skip stack-preview untuk PDF dan
+//    biarkan komponen PdfViewer yang menangani.
 #[tauri::command]
 fn get_preview(path: String) -> Result<String, String> {
     let p = Path::new(&path);
@@ -62,8 +76,11 @@ fn get_preview(path: String) -> Result<String, String> {
         .unwrap_or("")
         .to_lowercase();
 
+    if PDF_EXT.contains(&ext.as_str()) {
+        return Err("PDF_PREVIEW_UNSUPPORTED".into());
+    }
+
     if STANDARD_EXT.contains(&ext.as_str()) {
-        // Baca langsung, encode base64
         let bytes = fs::read(p).map_err(|e| e.to_string())?;
         let b64 = general_purpose::STANDARD.encode(bytes);
         let mime = if ext == "png" { "image/png" } else { "image/jpeg" };
@@ -104,7 +121,7 @@ fn get_preview(path: String) -> Result<String, String> {
     Ok(format!("data:image/jpeg;base64,{}", b64))
 }
 
-// 3. Pindahkan (move) foto yang dipilih ke folder tujuan
+// 3. Pindahkan (move) foto/PDF yang dipilih ke folder tujuan
 #[tauri::command]
 fn move_photo(source: String, dest_folder: String) -> Result<String, String> {
     let src = Path::new(&source);
@@ -119,7 +136,6 @@ fn move_photo(source: String, dest_folder: String) -> Result<String, String> {
         .ok_or_else(|| "Nama file tidak valid".to_string())?;
     let dest_path = dest_dir.join(file_name);
 
-    // Kalau nama sudah ada, jangan overwrite -> tambahkan suffix
     let final_dest = if dest_path.exists() {
         let stem = src.file_stem().unwrap_or_default().to_string_lossy();
         let ext = src.extension().unwrap_or_default().to_string_lossy();
