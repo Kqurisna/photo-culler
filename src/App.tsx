@@ -4,8 +4,9 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 import PdfViewer from "./components/media/PdfViewer";
+import VideoViewer from "./components/media/VideoViewer";
 
-type PhotoKind = "image" | "pdf";
+type PhotoKind = "image" | "pdf" | "video";
 type PhotoEntry = {
   path: string;
   name: string;
@@ -152,7 +153,7 @@ function App() {
     }
     const current = queue[0];
 
-    if (current.kind === "pdf") {
+    if (current.kind === "pdf" || current.kind === "video") {
       setPreviewSrc("");
       setLoadingPreview(false);
       return;
@@ -182,7 +183,11 @@ function App() {
 
     // prefetch the next couple of frames so the swipe never stalls on load
     queue.slice(1, 3).forEach((p) => {
-      if (p.kind !== "pdf" && !previewCache.current.has(p.path)) {
+      if (
+        p.kind !== "pdf" &&
+        p.kind !== "video" &&
+        !previewCache.current.has(p.path)
+      ) {
         invoke<string>("get_preview", { path: p.path })
           .then((dataUrl) => previewCache.current.set(p.path, dataUrl))
           .catch(() => {});
@@ -364,6 +369,10 @@ function App() {
     setDragX(x);
   }, []);
 
+  // Ref jembatan supaya triggerExit bisa panggil handleExitAnimationEnd
+  // walau fungsi itu baru didefinisikan setelah triggerExit di bawah ini.
+  const handleExitAnimationEndRef = useRef<() => void>(() => {});
+
   // --- Kick off the direction-specific exit animation for the top print.
   // startX/startRot let a released drag continue smoothly into the
   // animation instead of jumping back to center first; keyboard/button
@@ -376,6 +385,12 @@ function App() {
       setExitStartX(startX);
       setExitStartRot(startRot);
       setExitDir(direction);
+      // Failsafe: if the CSS animationend event never fires for any reason
+      // (heavy main-thread work, a video that failed to load, etc.), force
+      // the exit to complete anyway so the buttons never stay stuck disabled.
+      window.setTimeout(() => {
+        handleExitAnimationEndRef.current();
+      }, 600);
     },
     [queue.length, isProcessing, exitDir],
   );
@@ -396,6 +411,10 @@ function App() {
       handleSelect(photo);
     }
   }, [exitDir, queue, handleReject, handleSelect]);
+
+  useEffect(() => {
+    handleExitAnimationEndRef.current = handleExitAnimationEnd;
+  }, [handleExitAnimationEnd]);
 
   // --- Drag-to-swipe on the preview card, with velocity tracking so a
   // quick flick clears the card even if it didn't travel far. ---
@@ -715,7 +734,7 @@ function App() {
                 </div>
               )}
 
-              {!loadingPreview && (previewSrc || current?.kind === "pdf") && (
+              {!loadingPreview && (previewSrc || current?.kind === "pdf" || current?.kind === "video") && (
                 <div
                   className={
                     "preview-card" +
@@ -737,9 +756,26 @@ function App() {
                   }
                   onAnimationEnd={handleExitAnimationEnd}
                 >
-                  <div className="preview-photo-inner">
+                  <div
+                    className={
+                      "preview-photo-inner" +
+                      (current?.kind === "pdf" || current?.kind === "video"
+                        ? " is-clickable"
+                        : "")
+                    }
+                    onClick={() => {
+                      if (
+                        current &&
+                        (current.kind === "pdf" || current.kind === "video")
+                      ) {
+                        setFullViewPhoto(current);
+                      }
+                    }}
+                  >
                     {current?.kind === "pdf" ? (
                       <PdfViewer path={current.path} compact />
+                    ) : current?.kind === "video" ? (
+                      <VideoViewer path={current.path} compact />
                     ) : (
                       <img
                         src={previewSrc}
@@ -818,16 +854,17 @@ function App() {
             >
               ← Lewati
             </button>
-            {current && current.kind === "pdf" && (
-              <button
-                type="button"
-                className="ghost-btn"
-                onClick={() => setFullViewPhoto(current)}
-                disabled={isExiting}
-              >
-                Lihat PDF
-              </button>
-            )}
+            {current &&
+              (current.kind === "pdf" || current.kind === "video") && (
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={() => setFullViewPhoto(current)}
+                  disabled={isExiting}
+                >
+                  {current.kind === "pdf" ? "Lihat PDF" : "Putar Video"}{" "}
+                </button>
+              )}
             <button
               className="select-btn"
               onClick={() => triggerExit("right")}
@@ -976,7 +1013,10 @@ function App() {
       {fullViewPhoto && (
         <div
           className="photo-lightbox"
-          onClick={() => setFullViewPhoto(null)}
+          onClick={() => {
+            (document.activeElement as HTMLElement | null)?.blur();
+            setFullViewPhoto(null);
+          }}
           role="dialog"
           aria-modal="true"
         >
@@ -987,13 +1027,20 @@ function App() {
             <button
               type="button"
               className="photo-lightbox-close"
-              onClick={() => setFullViewPhoto(null)}
+              onClick={() => {
+                (document.activeElement as HTMLElement | null)?.blur();
+                setFullViewPhoto(null);
+              }}
               aria-label="Tutup"
             >
               ×
             </button>
             <div className="pdf-lightbox-viewer-wrap">
-              <PdfViewer path={fullViewPhoto.path} />
+              {fullViewPhoto.kind === "pdf" ? (
+                <PdfViewer path={fullViewPhoto.path} />
+              ) : (
+                <VideoViewer path={fullViewPhoto.path} />
+              )}{" "}
             </div>
             <p className="photo-lightbox-caption mono">{fullViewPhoto.name}</p>
           </div>

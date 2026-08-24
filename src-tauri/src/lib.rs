@@ -8,7 +8,7 @@ use base64::{engine::general_purpose, Engine as _};
 struct PhotoEntry {
     path: String,
     name: String,
-    kind: String, // "image" | "pdf"
+    kind: String, // "image" | "pdf" | "video"
 }
 
 const RAW_HEIC_EXT: &[&str] = &[
@@ -16,18 +16,21 @@ const RAW_HEIC_EXT: &[&str] = &[
 ];
 const STANDARD_EXT: &[&str] = &["jpg", "jpeg", "png", "tiff", "tif", "bmp"];
 const PDF_EXT: &[&str] = &["pdf"];
+const VIDEO_EXT: &[&str] = &["mp4", "mov", "m4v", "avi", "mkv", "webm"];
 
 fn kind_for_ext(ext: &str) -> Option<&'static str> {
     if STANDARD_EXT.contains(&ext) || RAW_HEIC_EXT.contains(&ext) {
         Some("image")
     } else if PDF_EXT.contains(&ext) {
         Some("pdf")
+    } else if VIDEO_EXT.contains(&ext) {
+        Some("video")
     } else {
         None
     }
 }
 
-// 1. List semua foto + PDF di folder yang dipilih
+// 1. List semua foto + PDF + video di folder yang dipilih
 #[tauri::command]
 fn list_photos(folder: String) -> Result<Vec<PhotoEntry>, String> {
     let mut entries: Vec<PhotoEntry> = Vec::new();
@@ -63,10 +66,10 @@ fn list_photos(folder: String) -> Result<Vec<PhotoEntry>, String> {
 }
 
 // 2. Generate preview base64 JPG.
-//    Untuk PDF: kita TIDAK render di sini (itu tugas PdfViewer di frontend
-//    lewat pdfjs-dist + convertFileSrc). Fungsi ini mengembalikan error
-//    khusus supaya App.tsx tahu harus skip stack-preview untuk PDF dan
-//    biarkan komponen PdfViewer yang menangani.
+//    PDF dan video TIDAK direct render di sini — itu tugas PdfViewer /
+//    VideoViewer di frontend (pdfjs-dist / convertFileSrc). Fungsi ini
+//    mengembalikan error khusus supaya App.tsx skip stack-preview untuk
+//    keduanya dan biarkan komponen viewer masing-masing yang menangani.
 #[tauri::command]
 fn get_preview(path: String) -> Result<String, String> {
     let p = Path::new(&path);
@@ -78,6 +81,10 @@ fn get_preview(path: String) -> Result<String, String> {
 
     if PDF_EXT.contains(&ext.as_str()) {
         return Err("PDF_PREVIEW_UNSUPPORTED".into());
+    }
+
+    if VIDEO_EXT.contains(&ext.as_str()) {
+        return Err("VIDEO_PREVIEW_UNSUPPORTED".into());
     }
 
     if STANDARD_EXT.contains(&ext.as_str()) {
@@ -121,7 +128,59 @@ fn get_preview(path: String) -> Result<String, String> {
     Ok(format!("data:image/jpeg;base64,{}", b64))
 }
 
-// 3. Pindahkan (move) foto/PDF yang dipilih ke folder tujuan
+// 2b. Generate thumbnail JPG dari video pakai ffmpeg (ambil 1 frame).
+//     Beda dari get_preview: ini khusus video, dan mengembalikan error
+//     yang jelas kalau ffmpeg tidak ada di sistem, supaya frontend bisa
+//     fallback ke ikon generik tanpa nge-hang.
+#[tauri::command]
+fn get_video_thumbnail(path: String) -> Result<String, String> {
+    let p = Path::new(&path);
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if !VIDEO_EXT.contains(&ext.as_str()) {
+        return Err("Bukan file video".into());
+    }
+
+    let tmp_dir = std::env::temp_dir().join("photo-culler-video-thumb");
+    fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
+
+    let file_stem = p
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("thumb");
+    let out_path = tmp_dir.join(format!("{}.jpg", file_stem));
+
+    // Ambil 1 frame di detik ke-1 (fallback ke frame pertama kalau video
+    // lebih pendek dari itu — ffmpeg otomatis clamp ke durasi video).
+    let output = Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-ss", "1",
+            "-i", path.as_str(),
+            "-frames:v", "1",
+            "-q:v", "3",
+            out_path.to_str().unwrap(),
+        ])
+        .output()
+        .map_err(|e| format!("Gagal menjalankan ffmpeg (apakah sudah terinstall?): {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "ffmpeg gagal membuat thumbnail: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let bytes = fs::read(&out_path).map_err(|e| e.to_string())?;
+    let b64 = general_purpose::STANDARD.encode(bytes);
+    Ok(format!("data:image/jpeg;base64,{}", b64))
+}
+
+// 3. Pindahkan (move) foto/PDF/video yang dipilih ke folder tujuan
 #[tauri::command]
 fn move_photo(source: String, dest_folder: String) -> Result<String, String> {
     let src = Path::new(&source);
@@ -165,6 +224,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_photos,
             get_preview,
+            get_video_thumbnail,
             move_photo
         ])
         .run(tauri::generate_context!())
