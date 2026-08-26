@@ -151,11 +151,6 @@ function App() {
   // --- Load preview untuk foto di posisi paling depan queue ---
   // PDF tidak lewat get_preview (backend sengaja menolaknya) — PdfViewer
   // merender PDF sendiri lewat pdfjs-dist + convertFileSrc.
-  const visibleQueue =
-    mediaFilter === "all"
-      ? queue
-      : queue.filter((p) => p.kind === mediaFilter);
-
   useEffect(() => {
     if (stage !== "sorting" || visibleQueue.length === 0) {
       setPreviewSrc("");
