@@ -1658,3 +1658,79 @@ button:disabled {
   background: rgba(255, 255, 255, 0.25);
   color: #fff;
 }
+
+/* ---------- Mode Banding (Compare Mode) ---------- */
+
+.compare-stage.compare-mode {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.compare-stage.compare-mode .filmstrip {
+  flex: 1;
+  min-width: 0;
+}
+
+.compare-reference {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.compare-reference-label {
+  align-self: flex-start;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.compare-hint-inline {
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.compare-reference-box {
+  width: 100%;
+  height: 76vh;
+  min-height: 520px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.compare-reference-box .preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.compare-reference-name {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .compare-stage.compare-mode {
+    flex-direction: column;
+  }
+  .compare-reference-box {
+    height: 36vh;
+    min-height: 260px;
+  }
+}

@@ -87,6 +87,12 @@ function App() {
   // Selected-photos list (most recent first) backing the tray dropdown,
   // plus whether that dropdown is currently open.
   const [selectedPhotos, setSelectedPhotos] = useState<PhotoEntry[]>([]);
+  // --- Mode Banding (Compare Mode) ---
+  // referencePhoto = foto "patokan" di kotak kiri, statis selama mode aktif.
+  // Diaktifkan lewat ArrowDown (dari kartu current saat sorting biasa) atau
+  // klik foto di tray Selected. Dinonaktifkan lewat ArrowUp.
+  const [compareMode, setCompareMode] = useState(false);
+  const [referencePhoto, setReferencePhoto] = useState<PhotoEntry | null>(null);
   const [trayOpen, setTrayOpen] = useState(false);
   const trayRef = useRef<HTMLDivElement>(null);
 
@@ -479,6 +485,18 @@ function App() {
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         triggerExit("right");
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!compareMode && visibleQueue[0] && exitDir === null) {
+          setReferencePhoto(visibleQueue[0]);
+          setCompareMode(true);
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (compareMode) {
+          setCompareMode(false);
+          setReferencePhoto(null);
+        }
       } else if ((e.key === "z" || e.key === "Z") && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         handleUndo();
@@ -496,7 +514,7 @@ function App() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [stage, triggerExit, handleUndo, toggleImmersive, immersive]);
+  }, [stage, triggerExit, handleUndo, toggleImmersive, immersive, compareMode, visibleQueue, exitDir]);
 
   const finishSorting = () => {
     setStage("done");
@@ -728,7 +746,32 @@ function App() {
 
       <div className="sorting-layout">
         <div className="sorting-main">
-          <div className="filmstrip">
+          <div className={`compare-stage${compareMode ? " compare-mode" : ""}`}>
+            {compareMode && referencePhoto && (
+              <div className="compare-reference">
+                <div className="compare-reference-label mono">
+                  Patokan · <span className="compare-hint-inline">↑ keluar</span>
+                </div>
+                <div className="compare-reference-box">
+                  {referencePhoto.kind === "pdf" ? (
+                    <PdfViewer path={referencePhoto.path} compact />
+                  ) : referencePhoto.kind === "video" ? (
+                    <VideoViewer path={referencePhoto.path} compact />
+                  ) : (
+                    <img
+                      src={previewCache.current.get(referencePhoto.path) ?? ""}
+                      alt={referencePhoto.name}
+                      className="preview-img"
+                      draggable={false}
+                    />
+                  )}
+                </div>
+                <p className="compare-reference-name mono">
+                  {referencePhoto.name}
+                </p>
+              </div>
+            )}
+            <div className="filmstrip">
             <div className="sprocket-row" aria-hidden="true">
               {Array.from({ length: 16 }).map((_, i) => (
                 <span key={i} />
@@ -875,6 +918,7 @@ function App() {
                 <span key={i} />
               ))}
             </div>
+          </div>
           </div>
 
           {immersive && (
