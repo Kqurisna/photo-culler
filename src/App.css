@@ -1638,3 +1638,23 @@ button:disabled {
   justify-content: center;
   width: 100%;
 }
+
+.media-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.media-filter-count {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.media-filter-btn.is-active .media-filter-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}

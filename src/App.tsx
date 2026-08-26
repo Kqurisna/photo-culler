@@ -676,10 +676,22 @@ function App() {
         <div className="media-filter" role="group" aria-label="Filter jenis media">
           {(
             [
-              { value: "all", label: "Semua" },
-              { value: "image", label: "Foto" },
-              { value: "pdf", label: "PDF" },
-              { value: "video", label: "Video" },
+              { value: "all", label: "Semua", count: queue.length },
+              {
+                value: "image",
+                label: "Foto",
+                count: queue.filter((p) => p.kind === "image").length,
+              },
+              {
+                value: "pdf",
+                label: "PDF",
+                count: queue.filter((p) => p.kind === "pdf").length,
+              },
+              {
+                value: "video",
+                label: "Video",
+                count: queue.filter((p) => p.kind === "video").length,
+              },
             ] as const
           ).map((opt) => (
             <button
@@ -690,6 +702,7 @@ function App() {
               disabled={isProcessing || isExiting}
             >
               {opt.label}
+              <span className="media-filter-count mono">{opt.count}</span>
             </button>
           ))}
         </div>
