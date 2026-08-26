@@ -7,12 +7,17 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 interface PdfViewerProps {
   path: string;
-  /** true = dipakai di stack preview kecil (1 halaman + prev/next).
-   *  false = mode penuh: semua halaman ditumpuk, bisa discroll + fullscreen. */
+  /** true = dipakai di stack preview kecil.
+   *  false = mode penuh (modal "Lihat PDF") dengan toolbar lengkap + fullscreen.
+   *  Keduanya sama-sama scroll semua halaman via trackpad/mouse wheel. */
   compact?: boolean;
 }
 
-const MAX_RENDER_SCALE = 3; // batas atas kualitas render supaya tidak terlalu berat
+const MAX_RENDER_SCALE = 3;
+const COMPACT_SCALE = 0.75;
+const DEFAULT_FULL_SCALE = 1.1; // 110%
+const MIN_SCALE = 0.4;
+const MAX_SCALE = 3;
 
 export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
   const docRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
@@ -20,15 +25,8 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ---- state khusus compact (single page) ----
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [pageNum, setPageNum] = useState(1);
-  const [scale, setScale] = useState(0.9);
-
-  // ---- state khusus full/scroll mode ----
-  const scrollWrapRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [fullScale, setFullScale] = useState(1.3); // zoom logis, terpisah dari resolusi render
+  const [scale, setScale] = useState(compact ? COMPACT_SCALE : DEFAULT_FULL_SCALE);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const pageCanvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
 
@@ -42,7 +40,7 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setPageNum(1);
+    setScale(compact ? COMPACT_SCALE : DEFAULT_FULL_SCALE);
     pageCanvasRefs.current.clear();
 
     const url = convertFileSrc(path);
@@ -66,9 +64,12 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
       docRef.current?.destroy();
       docRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
 
-  // ---- Render satu halaman ke canvas tertentu, dengan resolusi tinggi ----
+  // Render satu halaman ke canvas. Canvas TIDAK dibatasi max-width di CSS —
+  // container-nya (overflow: auto) yang menangani scroll saat konten lebih
+  // besar dari area tampil, supaya zoom di atas 100% benar-benar kelihatan.
   const renderPageToCanvas = useCallback(
     async (pageIndex: number, canvas: HTMLCanvasElement, cssScale: number) => {
       const doc = docRef.current;
@@ -80,8 +81,6 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
       if (!ctx) return;
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      // ukuran tampil (CSS) tetap di skala logis, bukan skala render —
-      // ini yang membuat gambar terlihat tajam di layar retina
       canvas.style.width = `${viewport.width / dpr}px`;
       canvas.style.height = `${viewport.height / dpr}px`;
       await page.render({ canvasContext: ctx, viewport }).promise;
@@ -89,24 +88,9 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
     [dpr],
   );
 
-  // ---- Mode compact: render halaman aktif saja ----
-  const renderCompactPage = useCallback(async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    try {
-      await renderPageToCanvas(pageNum, canvas, scale);
-    } catch (e) {
-      setError(String(e));
-    }
-  }, [pageNum, scale, renderPageToCanvas]);
-
+  // Render semua halaman begitu numPages diketahui / zoom berubah
   useEffect(() => {
-    if (compact && !loading && !error) renderCompactPage();
-  }, [compact, loading, error, renderCompactPage]);
-
-  // ---- Mode full: render semua halaman begitu numPages diketahui / zoom berubah ----
-  useEffect(() => {
-    if (compact || loading || error || numPages === 0) return;
+    if (loading || error || numPages === 0) return;
     let cancelled = false;
     (async () => {
       for (let i = 1; i <= numPages; i++) {
@@ -114,7 +98,7 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
         const canvas = pageCanvasRefs.current.get(i);
         if (canvas) {
           try {
-            await renderPageToCanvas(i, canvas, fullScale);
+            await renderPageToCanvas(i, canvas, scale);
           } catch (e) {
             if (!cancelled) setError(String(e));
           }
@@ -124,9 +108,8 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
     return () => {
       cancelled = true;
     };
-  }, [compact, loading, error, numPages, fullScale, renderPageToCanvas]);
+  }, [loading, error, numPages, scale, renderPageToCanvas]);
 
-  // ---- Fullscreen toggle (Fullscreen API pada wrapper modal) ----
   const toggleFullscreen = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -138,19 +121,15 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
   }, []);
 
   useEffect(() => {
+    if (compact) return; // tombol fullscreen cuma ada di mode full
     const handler = () =>
       setIsFullscreen(document.fullscreenElement === containerRef.current);
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
-  }, []);
+  }, [compact]);
 
-  const goPrev = () => setPageNum((p) => Math.max(1, p - 1));
-  const goNext = () => setPageNum((p) => Math.min(numPages, p + 1));
-  const zoomIn = () => setScale((s) => Math.min(3, s + 0.2));
-  const zoomOut = () => setScale((s) => Math.max(0.4, s - 0.2));
-
-  const fullZoomIn = () => setFullScale((s) => Math.min(3, s + 0.2));
-  const fullZoomOut = () => setFullScale((s) => Math.max(0.5, s - 0.2));
+  const zoomIn = () => setScale((s) => Math.min(MAX_SCALE, s + 0.2));
+  const zoomOut = () => setScale((s) => Math.max(MIN_SCALE, s - 0.2));
 
   if (error) {
     return (
@@ -160,88 +139,51 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
     );
   }
 
-  // ================= Mode compact (stack preview) =================
-  if (compact) {
-    return (
-      <div className="pdf-viewer pdf-viewer-compact">
-        {loading ? (
-          <div className="pdf-viewer-loading mono">Memuat PDF…</div>
-        ) : (
-          <>
-            <div className="pdf-canvas-wrap">
-              <canvas ref={canvasRef} className="pdf-canvas" />
-            </div>
-            <div className="pdf-toolbar mono">
-              <button
-                type="button"
-                className="ghost-btn"
-                onClick={goPrev}
-                disabled={pageNum <= 1}
-              >
-                ‹ Prev
-              </button>
-              <span className="pdf-page-label">
-                {pageNum} / {numPages || "?"}
-              </span>
-              <button
-                type="button"
-                className="ghost-btn"
-                onClick={goNext}
-                disabled={pageNum >= numPages}
-              >
-                Next ›
-              </button>
-              <span className="pdf-toolbar-sep" />
-              <button type="button" className="ghost-btn" onClick={zoomOut}>
-                −
-              </button>
-              <span className="pdf-zoom-label">{Math.round(scale * 100)}%</span>
-              <button type="button" className="ghost-btn" onClick={zoomIn}>
-                +
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  }
+  const scrollClass = compact ? "pdf-compact-scroll" : "pdf-full-scroll";
+  const pageWrapClass = compact ? "pdf-compact-page" : "pdf-full-page";
 
-  // ================= Mode full: scroll semua halaman + fullscreen =================
   return (
     <div
       ref={containerRef}
-      className={`pdf-viewer pdf-viewer-full${isFullscreen ? " is-fullscreen" : ""}`}
+      className={`pdf-viewer${compact ? " pdf-viewer-compact" : " pdf-viewer-full"}${
+        isFullscreen ? " is-fullscreen" : ""
+      }`}
     >
       {loading ? (
         <div className="pdf-viewer-loading mono">Memuat PDF…</div>
       ) : (
         <>
-          <div className="pdf-full-toolbar mono">
+          <div className={compact ? "pdf-toolbar mono" : "pdf-full-toolbar mono"}>
             <span className="pdf-page-label">{numPages} halaman</span>
             <span className="pdf-toolbar-sep" />
-            <button type="button" className="ghost-btn" onClick={fullZoomOut}>
+            <button type="button" className="ghost-btn" onClick={zoomOut}>
               −
             </button>
-            <span className="pdf-zoom-label">
-              {Math.round(fullScale * 100)}%
-            </span>
-            <button type="button" className="ghost-btn" onClick={fullZoomIn}>
+            <span className="pdf-zoom-label">{Math.round(scale * 100)}%</span>
+            <button type="button" className="ghost-btn" onClick={zoomIn}>
               +
             </button>
-            <span className="pdf-toolbar-sep" />
-            <button
-              type="button"
-              className="ghost-btn"
-              onClick={toggleFullscreen}
-            >
-              {isFullscreen ? "Keluar layar penuh" : "Layar penuh"}
-            </button>
+            {!compact && (
+              <>
+                <span className="pdf-toolbar-sep" />
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={toggleFullscreen}
+                >
+                  {isFullscreen ? "Keluar layar penuh" : "Layar penuh"}
+                </button>
+              </>
+            )}
           </div>
-          <div ref={scrollWrapRef} className="pdf-full-scroll">
+          {/* Scroll murni pakai overflow:auto native — trackpad/mouse wheel
+              langsung jalan tanpa handler khusus, jadi tidak perlu dibedakan
+              per-engine webview (WebKit/Chromium) seperti pinch-zoom. */}
+          <div className={scrollClass}>
             {Array.from({ length: numPages }).map((_, i) => {
               const pageIndex = i + 1;
               return (
-                <div className="pdf-full-page" key={pageIndex}>
+                <div className={pageWrapClass} key={pageIndex}>
                   <canvas
                     ref={(el) => {
                       if (el) pageCanvasRefs.current.set(pageIndex, el);
@@ -249,7 +191,9 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
                     }}
                     className="pdf-canvas"
                   />
-                  <span className="pdf-full-page-num mono">{pageIndex}</span>
+                  {!compact && (
+                    <span className="pdf-full-page-num mono">{pageIndex}</span>
+                  )}
                 </div>
               );
             })}
