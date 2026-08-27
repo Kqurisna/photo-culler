@@ -1661,33 +1661,6 @@ button:disabled {
 
 /* ---------- Mode Banding (Compare Mode) ---------- */
 
-/* Resize handle: divider antara kotak patokan dan filmstrip kandidat.
-   Lebar kotak kiri (compare-reference) diatur manual lewat inline style
-   flex-basis yang di-set dari state referenceWidthPct di App.tsx. */
-.compare-reference {
-  padding-right: 16px;
-}
-.compare-resize-handle {
-  flex-shrink: 0;
-  width: 16px;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: col-resize;
-  touch-action: none;
-}
-.compare-resize-grip {
-  width: 3px;
-  height: 48px;
-  border-radius: 2px;
-  background: var(--border-strong);
-}
-.compare-resize-handle:hover .compare-resize-grip,
-.compare-resize-handle:active .compare-resize-grip {
-  background: var(--accent);
-}
-
 .compare-stage.compare-mode {
   display: flex;
   gap: 20px;
