@@ -5,6 +5,8 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 type VideoViewerProps = {
   path: string;
   compact?: boolean;
+  /** Dipanggil begitu metadata video termuat, dengan rasio lebar/tinggi asli. */
+  onDimensionsChange?: (aspectRatio: number) => void;
 };
 
 function fileNameFromPath(path: string): string {
@@ -17,7 +19,7 @@ function fileNameFromPath(path: string): string {
 // di-skip lalu muncul lagi di queue).
 const thumbCache = new Map<string, string>();
 
-export default function VideoViewer({ path, compact = false }: VideoViewerProps) {
+export default function VideoViewer({ path, compact = false, onDimensionsChange }: VideoViewerProps) {
   const src = useMemo(() => convertFileSrc(path), [path]);
   const [thumb, setThumb] = useState<string>(thumbCache.get(path) ?? "");
   const [failed, setFailed] = useState(false);
@@ -89,6 +91,12 @@ export default function VideoViewer({ path, compact = false }: VideoViewerProps)
         playsInline
         preload="auto"
         tabIndex={-1}
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          if (v.videoWidth && v.videoHeight && onDimensionsChange) {
+            onDimensionsChange(v.videoWidth / v.videoHeight);
+          }
+        }}
       />
     </div>
   );

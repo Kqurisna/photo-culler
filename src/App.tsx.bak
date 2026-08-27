@@ -93,6 +93,37 @@ function App() {
   // klik foto di tray Selected. Dinonaktifkan lewat ArrowUp.
   const [compareMode, setCompareMode] = useState(false);
   const [referencePhoto, setReferencePhoto] = useState<PhotoEntry | null>(null);
+  // Lebar kotak patokan (kiri) dalam persen dari total lebar compare-stage.
+  // Diubah lewat drag pada resize handle di antara kotak kiri-kanan.
+  const [referenceWidthPct, setReferenceWidthPct] = useState(50);
+  // Rasio lebar/tinggi asli media yang sedang tampil — dipakai supaya
+  // bingkai foto (preview-photo-inner) dan kotak patokan (compare-reference-box)
+  // "memeluk" bentuk asli media (persegi panjang lebar untuk PDF/foto
+  // landscape, tinggi untuk potret) alih-alih selalu kotak besar dengan
+  // letterbox kosong di kiri-kanan/atas-bawah.
+  const [currentAspectRatio, setCurrentAspectRatio] = useState<number | null>(null);
+  const [referenceAspectRatio, setReferenceAspectRatio] = useState<number | null>(null);
+  const compareStageRef = useRef<HTMLDivElement>(null);
+  const isResizingCompare = useRef(false);
+
+  // --- Resize kotak patokan (drag divider antara kiri-kanan) ---
+  const onResizePointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    isResizingCompare.current = true;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+  }, []);
+
+  const onResizePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isResizingCompare.current || !compareStageRef.current) return;
+    const rect = compareStageRef.current.getBoundingClientRect();
+    const pct = ((e.clientX - rect.left) / rect.width) * 100;
+    setReferenceWidthPct(Math.min(75, Math.max(25, pct)));
+  }, []);
+
+  const onResizePointerUp = useCallback((e: React.PointerEvent) => {
+    isResizingCompare.current = false;
+    (e.target as Element).releasePointerCapture?.(e.pointerId);
+  }, []);
   const [trayOpen, setTrayOpen] = useState(false);
   const trayRef = useRef<HTMLDivElement>(null);
 
@@ -746,30 +777,50 @@ function App() {
 
       <div className="sorting-layout">
         <div className="sorting-main">
-          <div className={`compare-stage${compareMode ? " compare-mode" : ""}`}>
+          <div
+            ref={compareStageRef}
+            className={`compare-stage${compareMode ? " compare-mode" : ""}`}
+            onPointerMove={compareMode ? onResizePointerMove : undefined}
+            onPointerUp={compareMode ? onResizePointerUp : undefined}
+            onPointerLeave={compareMode ? onResizePointerUp : undefined}
+          >
             {compareMode && referencePhoto && (
-              <div className="compare-reference">
-                <div className="compare-reference-label mono">
-                  Patokan · <span className="compare-hint-inline">↑ keluar</span>
+              <>
+                <div
+                  className="compare-reference"
+                  style={{ flex: `0 0 ${referenceWidthPct}%` }}
+                >
+                  <div className="compare-reference-label mono">
+                    Patokan · <span className="compare-hint-inline">↑ keluar</span>
+                  </div>
+                  <div className="compare-reference-box">
+                    {referencePhoto.kind === "pdf" ? (
+                      <PdfViewer path={referencePhoto.path} compact />
+                    ) : referencePhoto.kind === "video" ? (
+                      <VideoViewer path={referencePhoto.path} compact />
+                    ) : (
+                      <img
+                        src={previewCache.current.get(referencePhoto.path) ?? ""}
+                        alt={referencePhoto.name}
+                        className="preview-img"
+                        draggable={false}
+                      />
+                    )}
+                  </div>
+                  <p className="compare-reference-name mono">
+                    {referencePhoto.name}
+                  </p>
                 </div>
-                <div className="compare-reference-box">
-                  {referencePhoto.kind === "pdf" ? (
-                    <PdfViewer path={referencePhoto.path} compact />
-                  ) : referencePhoto.kind === "video" ? (
-                    <VideoViewer path={referencePhoto.path} compact />
-                  ) : (
-                    <img
-                      src={previewCache.current.get(referencePhoto.path) ?? ""}
-                      alt={referencePhoto.name}
-                      className="preview-img"
-                      draggable={false}
-                    />
-                  )}
+                <div
+                  className="compare-resize-handle"
+                  onPointerDown={onResizePointerDown}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Geser untuk mengubah lebar kotak patokan"
+                >
+                  <span className="compare-resize-grip" aria-hidden="true" />
                 </div>
-                <p className="compare-reference-name mono">
-                  {referencePhoto.name}
-                </p>
-              </div>
+              </>
             )}
             <div className="filmstrip">
             <div className="sprocket-row" aria-hidden="true">
@@ -918,6 +969,7 @@ function App() {
                 <span key={i} />
               ))}
             </div>
+          </div>
           </div>
 
           {immersive && (

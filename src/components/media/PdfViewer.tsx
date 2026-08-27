@@ -6,6 +6,10 @@ import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 interface PdfViewerProps {
+  /** Dipanggil setiap kali halaman pertama selesai dirender, dengan rasio
+   *  lebar/tinggi asli halaman (dalam skala render, bukan CSS scale) —
+   *  dipakai parent untuk membuat bingkai foto/box mengikuti bentuk PDF. */
+  onDimensionsChange?: (aspectRatio: number) => void;
   path: string;
   /** true = dipakai di stack preview kecil.
    *  false = mode penuh (modal "Lihat PDF") dengan toolbar lengkap + fullscreen.
@@ -19,7 +23,7 @@ const DEFAULT_FULL_SCALE = 1.1; // 110%
 const MIN_SCALE = 0.4;
 const MAX_SCALE = 3;
 
-export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
+export default function PdfViewer({ path, compact = false, onDimensionsChange }: PdfViewerProps) {
   const docRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -103,6 +107,10 @@ export default function PdfViewer({ path, compact = false }: PdfViewerProps) {
       canvas.height = viewport.height;
       canvas.style.width = `${viewport.width / dpr}px`;
       canvas.style.height = `${viewport.height / dpr}px`;
+
+      if (pageIndex === 1 && onDimensionsChange) {
+        onDimensionsChange(viewport.width / viewport.height);
+      }
 
       const task = page.render({ canvasContext: ctx, viewport });
       renderTasks.current.set(canvas, task);

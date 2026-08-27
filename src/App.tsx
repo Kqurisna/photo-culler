@@ -96,6 +96,17 @@ function App() {
   // Lebar kotak patokan (kiri) dalam persen dari total lebar compare-stage.
   // Diubah lewat drag pada resize handle di antara kotak kiri-kanan.
   const [referenceWidthPct, setReferenceWidthPct] = useState(50);
+  // Rasio lebar/tinggi asli media yang sedang tampil — dipakai supaya
+  // bingkai foto (preview-photo-inner) dan kotak patokan (compare-reference-box)
+  // "memeluk" bentuk asli media (persegi panjang lebar untuk PDF/foto
+  // landscape, tinggi untuk potret) alih-alih selalu kotak besar dengan
+  // letterbox kosong di kiri-kanan/atas-bawah.
+  const [currentAspectRatio, setCurrentAspectRatio] = useState<number | null>(null);
+  const [referenceAspectRatio, setReferenceAspectRatio] = useState<number | null>(null);
+
+  useEffect(() => {
+    setReferenceAspectRatio(null); // reset — menunggu patokan baru selesai load
+  }, [referencePhoto]);
   const compareStageRef = useRef<HTMLDivElement>(null);
   const isResizingCompare = useRef(false);
 
@@ -191,6 +202,7 @@ function App() {
       setPreviewSrc("");
       return;
     }
+    setCurrentAspectRatio(null); // reset — menunggu media baru selesai load
     const current = visibleQueue[0];
 
     if (current.kind === "pdf" || current.kind === "video") {
@@ -786,17 +798,40 @@ function App() {
                   <div className="compare-reference-label mono">
                     Patokan · <span className="compare-hint-inline">↑ keluar</span>
                   </div>
-                  <div className="compare-reference-box">
+                  <div
+                    className="compare-reference-box"
+                    style={
+                      referenceAspectRatio
+                        ? { aspectRatio: `${referenceAspectRatio}` }
+                        : undefined
+                    }
+                  >
                     {referencePhoto.kind === "pdf" ? (
-                      <PdfViewer path={referencePhoto.path} compact />
+                      <PdfViewer
+                        path={referencePhoto.path}
+                        compact
+                        onDimensionsChange={setReferenceAspectRatio}
+                      />
                     ) : referencePhoto.kind === "video" ? (
-                      <VideoViewer path={referencePhoto.path} compact />
+                      <VideoViewer
+                        path={referencePhoto.path}
+                        compact
+                        onDimensionsChange={setReferenceAspectRatio}
+                      />
                     ) : (
                       <img
                         src={previewCache.current.get(referencePhoto.path) ?? ""}
                         alt={referencePhoto.name}
                         className="preview-img"
                         draggable={false}
+                        onLoad={(e) => {
+                          const img = e.currentTarget;
+                          if (img.naturalWidth && img.naturalHeight) {
+                            setReferenceAspectRatio(
+                              img.naturalWidth / img.naturalHeight,
+                            );
+                          }
+                        }}
                       />
                     )}
                   </div>
@@ -893,6 +928,11 @@ function App() {
                         ? " is-clickable"
                         : "")
                     }
+                    style={
+                      currentAspectRatio
+                        ? { aspectRatio: `${currentAspectRatio}` }
+                        : undefined
+                    }
                     onClick={() => {
                       if (
                         current &&
@@ -903,15 +943,31 @@ function App() {
                     }}
                   >
                     {current?.kind === "pdf" ? (
-                      <PdfViewer path={current.path} compact />
+                      <PdfViewer
+                        path={current.path}
+                        compact
+                        onDimensionsChange={setCurrentAspectRatio}
+                      />
                     ) : current?.kind === "video" ? (
-                      <VideoViewer path={current.path} compact />
+                      <VideoViewer
+                        path={current.path}
+                        compact
+                        onDimensionsChange={setCurrentAspectRatio}
+                      />
                     ) : (
                       <img
                         src={previewSrc}
                         alt={current?.name}
                         className="preview-img"
                         draggable={false}
+                        onLoad={(e) => {
+                          const img = e.currentTarget;
+                          if (img.naturalWidth && img.naturalHeight) {
+                            setCurrentAspectRatio(
+                              img.naturalWidth / img.naturalHeight,
+                            );
+                          }
+                        }}
                       />
                     )}
                   </div>

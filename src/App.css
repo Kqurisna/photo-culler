@@ -347,7 +347,7 @@ button:disabled {
 
 .sorting-screen {
   width: 100%;
-  max-width: 1100px;
+  max-width: 1400px;
 }
 
 .sorting-layout {
@@ -567,6 +567,9 @@ button:disabled {
   position: relative;
   flex: 1;
   min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto; /* pusatkan saat aspect-ratio membuatnya lebih kecil dari flex:1 */
   background: var(--surface-sunken);
   border: 1px solid var(--border);
   border-radius: 4px;
