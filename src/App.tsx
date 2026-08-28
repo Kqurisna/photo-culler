@@ -134,6 +134,11 @@ function App() {
   // A photo from the dropdown currently shown large in the lightbox.
   const [viewingPhoto, setViewingPhoto] = useState<PhotoEntry | null>(null);
   const [fullViewPhoto, setFullViewPhoto] = useState<PhotoEntry | null>(null);
+  const [fullViewAspectRatio, setFullViewAspectRatio] = useState<number | null>(null);
+  useEffect(() => {
+    setFullViewAspectRatio(null); // reset — menunggu media baru selesai load
+  }, [fullViewPhoto]);
+
   // --- Toasts (replace inline red text with a stack that self-clears) ---
   const pushToast = useCallback((message: string) => {
     const id = ++toastId;
@@ -1210,6 +1215,11 @@ function App() {
           <div
             className="photo-lightbox-card pdf-lightbox-card"
             onClick={(e) => e.stopPropagation()}
+            style={
+              fullViewAspectRatio
+                ? ({ "--full-aspect": `` } as React.CSSProperties)
+                : undefined
+            }
           >
             <button
               type="button"
@@ -1224,9 +1234,15 @@ function App() {
             </button>
             <div className="pdf-lightbox-viewer-wrap">
               {fullViewPhoto.kind === "pdf" ? (
-                <PdfViewer path={fullViewPhoto.path} />
+                <PdfViewer
+                  path={fullViewPhoto.path}
+                  onDimensionsChange={setFullViewAspectRatio}
+                />
               ) : (
-                <VideoViewer path={fullViewPhoto.path} />
+                <VideoViewer
+                  path={fullViewPhoto.path}
+                  onDimensionsChange={setFullViewAspectRatio}
+                />
               )}{" "}
             </div>
             <p className="photo-lightbox-caption mono">{fullViewPhoto.name}</p>

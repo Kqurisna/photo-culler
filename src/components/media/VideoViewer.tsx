@@ -63,6 +63,12 @@ export default function VideoViewer({ path, compact = false, onDimensionsChange 
             alt=""
             className="video-thumb-img"
             draggable={false}
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              if (img.naturalWidth && img.naturalHeight && onDimensionsChange) {
+                onDimensionsChange(img.naturalWidth / img.naturalHeight);
+              }
+            }}
           />
         ) : failed ? (
           <div className="video-thumb-fallback mono">
