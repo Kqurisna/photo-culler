@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -42,6 +42,15 @@ function seededOffset(seed: string, index: number) {
   return { rotate, shiftX };
 }
 
+function cacheSet(map: Map<string, string>, key: string, value: string, limit = 60) {
+  map.delete(key);
+  map.set(key, value);
+  if (map.size > limit) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+}
+
 let toastId = 0;
 
 function App() {
@@ -70,6 +79,8 @@ function App() {
   const lastMoveX = useRef(0);
   const lastMoveT = useRef(0);
   const pointerId = useRef<number | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const rafId = useRef<number | null>(null);
 
   // exit animation: which direction the top print is currently leaving in.
   // "left"  -> not decided yet, slides back into the waiting pile
@@ -109,6 +120,7 @@ function App() {
   }, [referencePhoto]);
   const compareStageRef = useRef<HTMLDivElement>(null);
   const isResizingCompare = useRef(false);
+  const resizeRafId = useRef<number | null>(null);
 
   // --- Resize kotak patokan (drag divider antara kiri-kanan) ---
   const onResizePointerDown = useCallback((e: React.PointerEvent) => {
@@ -119,12 +131,22 @@ function App() {
 
   const onResizePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isResizingCompare.current || !compareStageRef.current) return;
-    const rect = compareStageRef.current.getBoundingClientRect();
-    const pct = ((e.clientX - rect.left) / rect.width) * 100;
-    setReferenceWidthPct(Math.min(75, Math.max(25, pct)));
+    const clientX = e.clientX;
+    if (resizeRafId.current) return;
+    resizeRafId.current = requestAnimationFrame(() => {
+      resizeRafId.current = null;
+      if (!compareStageRef.current) return;
+      const rect = compareStageRef.current.getBoundingClientRect();
+      const pct = ((clientX - rect.left) / rect.width) * 100;
+      setReferenceWidthPct(Math.min(75, Math.max(25, pct)));
+    });
   }, []);
 
   const onResizePointerUp = useCallback((e: React.PointerEvent) => {
+    if (resizeRafId.current) {
+      cancelAnimationFrame(resizeRafId.current);
+      resizeRafId.current = null;
+    }
     isResizingCompare.current = false;
     (e.target as Element).releasePointerCapture?.(e.pointerId);
   }, []);
@@ -197,10 +219,13 @@ function App() {
   // --- Load preview untuk foto di posisi paling depan queue ---
   // PDF tidak lewat get_preview (backend sengaja menolaknya) — PdfViewer
   // merender PDF sendiri lewat pdfjs-dist + convertFileSrc.
-  const visibleQueue =
-    mediaFilter === "all"
-      ? queue
-      : queue.filter((p) => p.kind === mediaFilter);
+  const visibleQueue = useMemo(
+    () =>
+      mediaFilter === "all"
+        ? queue
+        : queue.filter((p) => p.kind === mediaFilter),
+    [queue, mediaFilter],
+  );
 
   useEffect(() => {
     if (stage !== "sorting" || visibleQueue.length === 0) {
@@ -227,7 +252,7 @@ function App() {
     invoke<string>("get_preview", { path: current.path })
       .then((dataUrl) => {
         if (!cancelled) {
-          previewCache.current.set(current.path, dataUrl);
+          cacheSet(previewCache.current, current.path, dataUrl);
           setPreviewSrc(dataUrl);
         }
       })
@@ -246,7 +271,7 @@ function App() {
         !previewCache.current.has(p.path)
       ) {
         invoke<string>("get_preview", { path: p.path })
-          .then((dataUrl) => previewCache.current.set(p.path, dataUrl))
+          .then((dataUrl) => cacheSet(previewCache.current, p.path, dataUrl))
           .catch(() => {});
       }
     });
@@ -254,7 +279,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [visibleQueue, stage, pushToast]);
+  }, [visibleQueue[0]?.path, visibleQueue.length, stage, pushToast]);
 
   const recordHistory = useCallback((entry: HistoryEntry) => {
     history.current = [...history.current, entry].slice(-HISTORY_LIMIT);
@@ -489,12 +514,26 @@ function App() {
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragging.current) return;
-    setDragX(e.clientX - dragStartX.current);
+    const x = e.clientX - dragStartX.current;
     lastMoveX.current = e.clientX;
     lastMoveT.current = performance.now();
+
+    if (rafId.current) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      if (cardRef.current) {
+        const rot = Math.max(-1, Math.min(1, x / SWIPE_THRESHOLD)) * 8;
+        cardRef.current.style.transform = `translateX(${x}px) rotate(${rot}deg)`;
+      }
+      setDragX(x);
+    });
   };
 
   const endDrag = () => {
+    if (rafId.current) {
+      cancelAnimationFrame(rafId.current);
+      rafId.current = null;
+    }
     if (!dragging.current) return;
     dragging.current = false;
 
@@ -906,6 +945,7 @@ function App() {
 
               {!loadingPreview && (previewSrc || current?.kind === "pdf" || current?.kind === "video") && (
                 <div
+                  ref={cardRef}
                   className={
                     "preview-card" +
                     (isSettling ? " settling" : "") +
