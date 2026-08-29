@@ -1920,3 +1920,18 @@ button:disabled {
   opacity: 0.82;
   filter: saturate(0.85) brightness(0.98);
 }
+
+.tutorial-desc {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.tutorial-desc:last-child {
+  margin-bottom: 0;
+}
+
+.tutorial-desc kbd {
+  margin: 0 2px;
+}

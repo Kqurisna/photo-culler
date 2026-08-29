@@ -1229,52 +1229,11 @@ function App() {
         </div>
 
         <aside className="side-panel">
-          <div className="side-card">
-            <div className="side-card-title">Sesi Ini</div>
-            <div className="stat-row">
-              <span className="stat-row-label">Terpilih</span>
-              <span className="stat-row-value is-accent">{selectedCount}</span>
-            </div>
-            <div className="stat-row">
-              <span className="stat-row-label">Dilewati</span>
-              <span className="stat-row-value is-reject">{rejectedCount}</span>
-            </div>
-            <div className="stat-row">
-              <span className="stat-row-label">Sisa</span>
-              <span className="stat-row-value">{queue.length}</span>
-            </div>
-            <div className="stat-row">
-              <span className="stat-row-label">Total roll</span>
-              <span className="stat-row-value">{totalLoaded}</span>
-            </div>
-          </div>
 
           <div className="side-card">
             <div className="side-card-title">Tujuan</div>
             <div className="side-dest">
               <span className="side-dest-path mono">{destFolder}</span>
-            </div>
-          </div>
-
-          <div className="side-card">
-            <div className="side-card-title">Pintasan</div>
-            <div className="shortcut-list">
-              <div className="shortcut-row">
-                <span>Lewati</span>
-                <kbd>←</kbd>
-              </div>
-              <div className="shortcut-row">
-                <span>Pilih</span>
-                <kbd>→</kbd>
-              </div>
-              <div className="shortcut-row">
-                <span>Batal</span>
-                <kbd>⌘Z</kbd>
-              </div>
-              <div className="shortcut-row">
-                <span>Layar penuh</span>
-                <kbd>F</kbd>
-              </div>
             </div>
           </div>
         </aside>
@@ -1370,7 +1329,7 @@ function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="shortcuts-modal-header">
-              <span>Keyboard Shortcuts</span>
+              <span>Tutorial & Panduan</span>
               <button
                 type="button"
                 className="photo-lightbox-close"
@@ -1381,6 +1340,35 @@ function App() {
               </button>
             </div>
             <div className="shortcuts-modal-body">
+              <div className="shortcuts-group">
+                <div className="shortcuts-group-title">Cara Kerja</div>
+                <p className="tutorial-desc">
+                  Setiap file (foto/PDF/video) muncul satu per satu sebagai
+                  kartu paling depan di tumpukan. Beberapa file berikutnya
+                  terlihat samar di belakangnya sebagai antrian.
+                </p>
+                <p className="tutorial-desc">
+                  <kbd>&larr;</kbd> melewati file (kembali ke belakang antrian),
+                  <kbd>&rarr;</kbd> memilihnya (masuk ke Selected dan dipindah
+                  ke folder tujuan).
+                </p>
+              </div>
+              <div className="shortcuts-group">
+                <div className="shortcuts-group-title">Filter Jenis Media</div>
+                <p className="tutorial-desc">
+                  Tombol Semua/Foto/PDF/Video di top-bar menyaring apa yang
+                  ditampilkan di tumpukan. File jenis lain tidak hilang,
+                  cuma disembunyikan sementara.
+                </p>
+              </div>
+              <div className="shortcuts-group">
+                <div className="shortcuts-group-title">Mode Banding</div>
+                <p className="tutorial-desc">
+                  Jadikan file yang sedang tampil sebagai patokan untuk
+                  dibandingkan berdampingan dengan file lain di antrian --
+                  berguna saat memilih yang terbaik dari beberapa foto mirip.
+                </p>
+              </div>
               <div className="shortcuts-group">
                 <div className="shortcuts-group-title">Umum</div>
                 <div className="shortcuts-row">
