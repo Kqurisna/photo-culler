@@ -1958,3 +1958,197 @@ button:disabled {
 .tutorial-desc kbd {
   margin: 0 2px;
 }
+
+/* ---------- Help button (?) ---------- */
+.help-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.help-btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.help-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Shortcuts modal polish ---------- */
+.shortcuts-modal {
+  border-radius: 10px;
+  animation: modal-in 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.shortcuts-modal-header {
+  background: var(--surface-sunken);
+  font-weight: 600;
+}
+
+.shortcuts-row + .shortcuts-row {
+  border-top: 1px dashed var(--border);
+}
+
+.shortcuts-modal kbd {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- Help trigger ("?") ----------
+   Bukan badge/ikon dekoratif — dibuat terlihat SEPERTI kbd sungguhan,
+   karena "?" memang shortcut asli untuk membuka panduan ini. Konsisten
+   dengan bahasa <kbd> yang sudah dipakai di seluruh app. */
+
+.help-btn,
+button[title="Lihat semua shortcut keyboard"] {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 5px 9px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  box-shadow: inset 0 -1px 0 var(--border-strong);
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.help-btn:hover:not(:disabled),
+button[title="Lihat semua shortcut keyboard"]:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.help-btn:active:not(:disabled),
+button[title="Lihat semua shortcut keyboard"]:active:not(:disabled) {
+  box-shadow: inset 0 1px 0 var(--border-strong);
+  transform: translateY(1px);
+}
+
+/* ---------- Modal Tutorial & Panduan ----------
+   Diperlakukan sebagai lembar spesifikasi (spec sheet), bukan kartu
+   berwarna: tracked mono label seperti .side-card-title, hairline rule,
+   tanpa dot/bullet dekoratif. */
+
+.shortcuts-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.shortcuts-modal-header > span:first-child {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* Hint fungsional (bukan hiasan) — menunjukkan cara menutup modal,
+   ditulis sebagai kbd asli, selaras dengan Esc handler yang memang ada. */
+.shortcuts-modal-header::after {
+  content: "Esc";
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 2px 6px;
+  margin-right: 24px;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+}
+
+.shortcuts-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  background: var(--surface);
+}
+
+.shortcuts-group-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.tutorial-desc {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink);
+}
+
+.tutorial-desc:last-child {
+  margin-bottom: 0;
+}
+
+.tutorial-desc kbd {
+  margin: 0 2px;
+}
+
+/* Baris shortcut: rapat, tabular, tanpa hover palsu — ini teks
+   referensi, bukan elemen interaktif, jadi tidak diberi hover state. */
+.shortcuts-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.shortcuts-row kbd {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.shortcuts-row span {
+  color: var(--muted);
+}
+
+.shortcuts-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.shortcuts-modal-body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+.shortcuts-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}

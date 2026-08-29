@@ -903,7 +903,7 @@ function App() {
             Penuh
           </button>
           <button
-            className="ghost-btn"
+            className="ghost-btn help-btn"
             onClick={() => setShortcutsOpen(true)}
             title="Lihat semua shortcut keyboard"
           >
