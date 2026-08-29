@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, useReducer } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -20,7 +20,7 @@ type Toast = { id: number; message: string };
 
 const SWIPE_THRESHOLD = 110;
 const VELOCITY_THRESHOLD = 0.55; // px/ms — a fast flick clears even under the distance threshold
-const STACK_DEPTH = 4; // how many sheets show behind the top photo
+const STACK_DEPTH = 2; // hanya 1 sheet yang tampil membelakangi current
 const HISTORY_LIMIT = 25;
 // Exit animation durations (320ms left / 460ms right) live in App.css as
 // `.preview-card.exit-left` / `.exit-right` — keep them in sync if changed.
@@ -91,6 +91,14 @@ function App() {
   const [trayBump, setTrayBump] = useState(false);
 
   const previewCache = useRef<Map<string, string>>(new Map());
+  // previewCache adalah ref (bukan state) demi performa — tapi itu artinya
+  // React tidak otomatis re-render saat prefetch di background selesai
+  // mengisi cache. Kartu tumpukan (stack-sheet) yang membaca cache ini saat
+  // render jadi bisa tetap kosong selamanya kalau kebetulan tidak ada
+  // re-render lain yang lewat. Counter ini sengaja di-bump setiap prefetch
+  // selesai, supaya React tahu harus re-render dan kartu tumpukan bisa
+  // menampilkan thumbnail yang baru saja masuk ke cache.
+  const [, forceCacheRerender] = useReducer((n: number) => n + 1, 0);
   const history = useRef<HistoryEntry[]>([]);
   const [canUndo, setCanUndo] = useState(false);
   const [undoFlash, setUndoFlash] = useState(false);
@@ -274,7 +282,13 @@ function App() {
         !previewCache.current.has(p.path)
       ) {
         invoke<string>("get_preview", { path: p.path })
-          .then((dataUrl) => cacheSet(previewCache.current, p.path, dataUrl))
+          .then((dataUrl) => {
+            cacheSet(previewCache.current, p.path, dataUrl);
+            // Cache-nya ref, jadi paksa re-render supaya kartu tumpukan
+            // (stack-sheet) yang butuh thumbnail ini langsung terupdate,
+            // bukan menunggu re-render lain yang kebetulan lewat.
+            forceCacheRerender();
+          })
           .catch(() => {});
       }
     });

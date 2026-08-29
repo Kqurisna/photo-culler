@@ -578,8 +578,12 @@ button:disabled {
      untuk media rasio apa pun (screenshot HP tegak, landscape, dll). */
   width: 100%;
   height: 100%;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  /* surface-sunken (bukan surface/putih polos) + border lebih tegas —
+     supaya kartu tetap terlihat jelas SEBELUM thumbnail-nya ter-cache
+     (mis. saat baru buka roll), bukan cuma kotak putih nyaris tak
+     kasat mata di atas background yang juga terang. */
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
   border-radius: 9px;
   box-shadow: 0 var(--depth-shadow-y, 4px) var(--depth-shadow-blur, 14px)
     rgba(20, 20, 15, 0.09);
