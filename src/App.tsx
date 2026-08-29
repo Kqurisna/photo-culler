@@ -934,23 +934,56 @@ function App() {
               onPointerUp={endDrag}
               onPointerLeave={endDrag}
             >
-              {/* sheets waiting underneath — back to front so the top photo lands last */}
-              {queue
+              {/* sheets waiting underneath — back to front so the top photo lands last.
+                  Pakai visibleQueue supaya konsisten dengan filter jenis media aktif. */}
+              {visibleQueue
                 .slice(1, STACK_DEPTH)
                 .map((p, i) => {
                   const depth = i + 1; // 1..STACK_DEPTH-1
-                  const { rotate, shiftX } = seededOffset(p.path, depth);
+                  const { rotate: rotSeed } = seededOffset(p.path, depth);
+                  // Tampilkan thumbnail asli kalau sudah ter-cache (biasanya
+                  // sudah di-prefetch) dan jenisnya foto — supaya user bisa
+                  // sedikit "mengintip" foto berikutnya, bukan cuma kotak
+                  // polos. PDF/video/belum-di-cache tetap fallback polos
+                  // supaya tidak memicu loading tambahan untuk kartu belakang.
+                  const thumb =
+                    p.kind === "image"
+                      ? previewCache.current.get(p.path)
+                      : undefined;
                   return (
                     <div
                       key={p.path}
                       className="stack-sheet"
                       style={{
-                        transform: `translate(${shiftX}px, ${depth * 3}px) rotate(${rotate}deg)`,
+                        inset: "0%",
+                        transform: `translate(${-(depth * 22)}px, ${-(depth * 6)}px) rotate(${-(depth * 9) + rotSeed * 0.6}deg)`,
+                        transformOrigin: "50% 90%",
                         zIndex: STACK_DEPTH - depth,
-                        opacity: 1 - depth * 0.16,
+                        opacity: 1 - depth * 0.14,
+                        ["--depth-blur" as string]: `${depth * 0.3}px`,
+                        ["--depth-shadow-y" as string]: `${2 + depth * 2}px`,
+                        ["--depth-shadow-blur" as string]: `${8 + depth * 4}px`,
                       }}
                       aria-hidden="true"
-                    />
+                    >
+                      <div
+                        className="stack-sheet-inner"
+                        style={
+                          currentAspectRatio
+                            ? { aspectRatio: `${currentAspectRatio}` }
+                            : undefined
+                        }
+                      >
+                        {thumb && (
+                          <img
+                            src={thumb}
+                            alt=""
+                            className="stack-sheet-thumb"
+                            draggable={false}
+                          />
+                        )}
+                      </div>
+                    </div>
                   );
                 })
                 .reverse()}
