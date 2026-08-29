@@ -22,14 +22,24 @@
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
 }
 
+html,
 body {
+  height: 100%;
   margin: 0;
+  overflow: hidden; /* jangan pernah scroll di level window/halaman utama */
+}
+
+body {
   font-family: var(--font-sans);
   color: var(--ink);
   background:
     radial-gradient(var(--border) 1px, transparent 1px) 0 0 / 22px 22px,
     var(--bg);
   -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100%;
 }
 
 .mono {
@@ -53,9 +63,14 @@ kbd {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  height: 100vh; /* dikunci (bukan min-height) supaya tidak pernah lebih
+     tinggi dari viewport dan memicu scroll halaman */
+  overflow-y: auto; /* fallback: kalau konten memang lebih tinggi dari
+     viewport (mis. window sangat kecil), scroll terjadi LOKAL di dalam
+     .container, bukan di halaman/body */
   padding: 32px;
   text-align: center;
+  box-sizing: border-box;
 }
 
 /* ---------- Toasts ---------- */
