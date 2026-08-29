@@ -558,12 +558,15 @@ button:disabled {
 /* Sheets waiting underneath — quiet, flat, no paper-stack drama */
 .stack-sheet {
   position: absolute;
+  inset: 3%; /* statis — sama seperti .preview-card, TIDAK dianimasikan.
+     Mengubah inset tiap frame memicu reflow (properti layout), bukan
+     murni composite; efek "mengecil ke belakang" sekarang sepenuhnya
+     lewat scale() di transform, yang GPU-accelerated. */
   display: flex;
   align-items: center;
   justify-content: center;
-  will-change: transform;
+  will-change: transform, opacity;
   transition:
-    inset 0.32s cubic-bezier(0.22, 1, 0.36, 1),
     transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 0.32s ease,
     filter 0.32s ease;
@@ -601,8 +604,27 @@ button:disabled {
   border: none;
   padding: 0;
   box-shadow: none;
-  will-change: transform;
-  transform-origin: center center;
+  will-change: transform, opacity;
+  transform-origin: 80% 80%; /* sama seperti transform-origin stack-sheet,
+     supaya arah "pop in" terasa nyambung dari posisi kartu di belakang */
+  /* Animasi mount: setiap kali key={current.path} berganti (kartu baru
+     jadi current), React remount elemen ini, memicu ulang animasi ini
+     dari awal. Kartu terasa "muncul" dari posisi stack di belakang,
+     bukan snap instan. Tidak mengganggu drag/exit karena keduanya
+     mengoverride transform lewat inline style / class terpisah pada
+     instance elemen yang berbeda (yang lama, yang sudah unmount). */
+  animation: card-pop-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes card-pop-in {
+  0% {
+    transform: translate(-7%, -7%) rotate(-3deg) scale(0.95);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
 }
 
 .preview-card.settling {
@@ -1346,6 +1368,7 @@ button:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .preview-card,
   .preview-card.settling,
   .preview-card.exit-left,
   .preview-card.exit-right,

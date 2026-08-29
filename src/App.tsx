@@ -1021,17 +1021,15 @@ function App() {
                         key={p.path}
                         className="stack-sheet"
                         style={{
-                          // inset progresif kecil supaya kartu belakang sedikit
-                          // lebih kecil dari current (efek "resesi" alami),
-                          // tidak persis sama besar seperti sebelumnya.
-                          inset: `${depth * 2.5}%`,
-                          // translate PERSENTASE (bukan px tetap) — persentase pada
-                          // transform:translate() dihitung relatif terhadap ukuran
-                          // elemen itu SENDIRI, jadi geserannya otomatis proporsional
-                          // baik untuk kartu portrait sempit maupun landscape lebar,
-                          // tidak lagi "tenggelam" pada kartu besar atau "terbang
-                          // jauh" pada kartu ekstrem seperti versi px tetap.
-                          transform: `translate(${-(depth * 7)}%, ${-(depth * 7)}%) rotate(${-(depth * 3) + rotSeed * 0.5}deg)`,
+                          // inset TETAP/statis (sama seperti .preview-card, 3%)
+                          // — sengaja TIDAK dianimasikan lagi. inset itu properti
+                          // layout (setara top/right/bottom/left); mengubahnya
+                          // memicu reflow tiap frame, bukan murni composite di
+                          // GPU seperti transform/opacity/filter. Itu penyebab
+                          // animasi terasa kurang mulus sebelumnya. Efek "makin
+                          // kecil ke belakang" sekarang murni lewat scale() di
+                          // dalam transform, yang full GPU-accelerated.
+                          transform: `translate(${-(depth * 7)}%, ${-(depth * 7)}%) rotate(${-(depth * 3) + rotSeed * 0.5}deg) scale(${1 - depth * 0.05})`,
                           transformOrigin: "80% 80%",
                           zIndex: STACK_DEPTH - depth,
                           opacity: 1 - depth * 0.14,
@@ -1075,6 +1073,7 @@ function App() {
                     current?.kind === "pdf" ||
                     current?.kind === "video") && (
                     <div
+                      key={current?.path}
                       ref={cardRef}
                       className={
                         "preview-card" +
@@ -1208,60 +1207,19 @@ function App() {
 
           {current && <p className="filename mono">{current.name}</p>}
 
-          <div className="controls">
-            <button
-              className="reject-btn"
-              onClick={() => triggerExit("left")}
-              disabled={queue.length === 0 || isExiting}
-            >
-              ← Lewati
-            </button>
-            {current &&
-              (current.kind === "pdf" || current.kind === "video") && (
+          {current &&
+            (current.kind === "pdf" || current.kind === "video") && (
+              <div className="controls">
                 <button
                   type="button"
                   className="ghost-btn"
                   onClick={() => setFullViewPhoto(current)}
                   disabled={isExiting}
                 >
-                  {current.kind === "pdf" ? "Lihat PDF" : "Putar Video"}{" "}
+                  {current.kind === "pdf" ? "Lihat PDF" : "Putar Video"}
                 </button>
-              )}
-            <button
-              className="select-btn"
-              onClick={() => triggerExit("right")}
-              disabled={queue.length === 0 || isProcessing || isExiting}
-            >
-              Pilih →
-            </button>
-          </div>
-
-          <p className="hint">
-            {current?.kind === "video" ? (
-              <>
-                <kbd>←</kbd> Lewati <kbd>→</kbd> Pilih — <kbd>Space</kbd>{" "}
-                Play/Pause — <kbd>J</kbd> −5s <kbd>L</kbd> +5s — <kbd>↑</kbd>/
-                <kbd>↓</kbd> Volume
-              </>
-            ) : current?.kind === "pdf" ? (
-              <>
-                <kbd>←</kbd> Lewati <kbd>→</kbd> Pilih — <kbd>↑</kbd>/
-                <kbd>↓</kbd> Halaman — <kbd>+</kbd>/<kbd>−</kbd> Zoom
-              </>
-            ) : (
-              <>
-                seret foto, atau pakai <kbd>←</kbd> <kbd>→</kbd>
-              </>
-            )}{" "}
-            — <kbd>⌘Z</kbd> batal — <kbd>F</kbd> layar penuh —{" "}
-            <button
-              type="button"
-              className="hint-more-link"
-              onClick={() => setShortcutsOpen(true)}
-            >
-              semua shortcut
-            </button>
-          </p>
+              </div>
+            )}
         </div>
 
         <aside className="side-panel">

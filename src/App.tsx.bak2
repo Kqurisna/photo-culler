@@ -1207,60 +1207,6 @@ function App() {
 
           {current && <p className="filename mono">{current.name}</p>}
 
-          <div className="controls">
-            <button
-              className="reject-btn"
-              onClick={() => triggerExit("left")}
-              disabled={queue.length === 0 || isExiting}
-            >
-              ← Lewati
-            </button>
-            {current &&
-              (current.kind === "pdf" || current.kind === "video") && (
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={() => setFullViewPhoto(current)}
-                  disabled={isExiting}
-                >
-                  {current.kind === "pdf" ? "Lihat PDF" : "Putar Video"}{" "}
-                </button>
-              )}
-            <button
-              className="select-btn"
-              onClick={() => triggerExit("right")}
-              disabled={queue.length === 0 || isProcessing || isExiting}
-            >
-              Pilih →
-            </button>
-          </div>
-
-          <p className="hint">
-            {current?.kind === "video" ? (
-              <>
-                <kbd>←</kbd> Lewati <kbd>→</kbd> Pilih — <kbd>Space</kbd>{" "}
-                Play/Pause — <kbd>J</kbd> −5s <kbd>L</kbd> +5s — <kbd>↑</kbd>/
-                <kbd>↓</kbd> Volume
-              </>
-            ) : current?.kind === "pdf" ? (
-              <>
-                <kbd>←</kbd> Lewati <kbd>→</kbd> Pilih — <kbd>↑</kbd>/
-                <kbd>↓</kbd> Halaman — <kbd>+</kbd>/<kbd>−</kbd> Zoom
-              </>
-            ) : (
-              <>
-                seret foto, atau pakai <kbd>←</kbd> <kbd>→</kbd>
-              </>
-            )}{" "}
-            — <kbd>⌘Z</kbd> batal — <kbd>F</kbd> layar penuh —{" "}
-            <button
-              type="button"
-              className="hint-more-link"
-              onClick={() => setShortcutsOpen(true)}
-            >
-              semua shortcut
-            </button>
-          </p>
         </div>
 
         <aside className="side-panel">
