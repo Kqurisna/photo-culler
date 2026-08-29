@@ -1,4 +1,11 @@
-import { useState, useEffect, useCallback, useRef, useMemo, useReducer } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  useReducer,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -42,7 +49,12 @@ function seededOffset(seed: string, index: number) {
   return { rotate, shiftX };
 }
 
-function cacheSet(map: Map<string, string>, key: string, value: string, limit = 60) {
+function cacheSet(
+  map: Map<string, string>,
+  key: string,
+  value: string,
+  limit = 60,
+) {
   map.delete(key);
   map.set(key, value);
   if (map.size > limit) {
@@ -127,8 +139,12 @@ function App() {
   // "memeluk" bentuk asli media (persegi panjang lebar untuk PDF/foto
   // landscape, tinggi untuk potret) alih-alih selalu kotak besar dengan
   // letterbox kosong di kiri-kanan/atas-bawah.
-  const [currentAspectRatio, setCurrentAspectRatio] = useState<number | null>(null);
-  const [referenceAspectRatio, setReferenceAspectRatio] = useState<number | null>(null);
+  const [currentAspectRatio, setCurrentAspectRatio] = useState<number | null>(
+    null,
+  );
+  const [referenceAspectRatio, setReferenceAspectRatio] = useState<
+    number | null
+  >(null);
 
   useEffect(() => {
     setReferenceAspectRatio(null); // reset — menunggu patokan baru selesai load
@@ -171,7 +187,9 @@ function App() {
   // A photo from the dropdown currently shown large in the lightbox.
   const [viewingPhoto, setViewingPhoto] = useState<PhotoEntry | null>(null);
   const [fullViewPhoto, setFullViewPhoto] = useState<PhotoEntry | null>(null);
-  const [fullViewAspectRatio, setFullViewAspectRatio] = useState<number | null>(null);
+  const [fullViewAspectRatio, setFullViewAspectRatio] = useState<number | null>(
+    null,
+  );
   useEffect(() => {
     setFullViewAspectRatio(null); // reset — menunggu media baru selesai load
   }, [fullViewPhoto]);
@@ -291,7 +309,9 @@ function App() {
         console.log(`[DIAG] Memulai prefetch: ${p.name}`);
         invoke<string>("get_preview", { path: p.path })
           .then((dataUrl) => {
-            console.log(`[DIAG] Prefetch BERHASIL: ${p.name}, len=${dataUrl?.length}`);
+            console.log(
+              `[DIAG] Prefetch BERHASIL: ${p.name}, len=${dataUrl?.length}`,
+            );
             cacheSet(previewCache.current, p.path, dataUrl);
             forceCacheRerender();
           })
@@ -603,7 +623,6 @@ function App() {
           target.isContentEditable);
       if (isTypingTarget) return;
 
-
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         triggerExit("left");
@@ -645,7 +664,17 @@ function App() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [stage, triggerExit, handleUndo, toggleImmersive, immersive, compareMode, visibleQueue, exitDir, shortcutsOpen]);
+  }, [
+    stage,
+    triggerExit,
+    handleUndo,
+    toggleImmersive,
+    immersive,
+    compareMode,
+    visibleQueue,
+    exitDir,
+    shortcutsOpen,
+  ]);
 
   const finishSorting = () => {
     setStage("done");
@@ -822,7 +851,11 @@ function App() {
           <span className="stat-value">{selectedCount}</span> / {totalLoaded}{" "}
           terpilih
         </span>
-        <div className="media-filter" role="group" aria-label="Filter jenis media">
+        <div
+          className="media-filter"
+          role="group"
+          aria-label="Filter jenis media"
+        >
           {(
             [
               { value: "all", label: "Semua", count: queue.length },
@@ -898,7 +931,8 @@ function App() {
                   style={{ flex: `0 0 ${referenceWidthPct}%` }}
                 >
                   <div className="compare-reference-label mono">
-                    Patokan · <span className="compare-hint-inline">↑ keluar</span>
+                    Patokan ·{" "}
+                    <span className="compare-hint-inline">↑ keluar</span>
                   </div>
                   <div
                     className="compare-reference-box"
@@ -922,7 +956,9 @@ function App() {
                       />
                     ) : (
                       <img
-                        src={previewCache.current.get(referencePhoto.path) ?? ""}
+                        src={
+                          previewCache.current.get(referencePhoto.path) ?? ""
+                        }
                         alt={referencePhoto.name}
                         className="preview-img"
                         draggable={false}
@@ -953,210 +989,213 @@ function App() {
               </>
             )}
             <div className="filmstrip">
-            <div className="sprocket-row" aria-hidden="true">
-              {Array.from({ length: 16 }).map((_, i) => (
-                <span key={i} />
-              ))}
-            </div>
+              <div className="sprocket-row" aria-hidden="true">
+                {Array.from({ length: 16 }).map((_, i) => (
+                  <span key={i} />
+                ))}
+              </div>
 
-            <div
-              className={`preview-box${isExiting ? " is-exiting" : ""}`}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={endDrag}
-              onPointerLeave={endDrag}
-            >
-              {/* sheets waiting underneath — back to front so the top photo lands last.
+              <div
+                className={`preview-box${isExiting ? " is-exiting" : ""}`}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={endDrag}
+                onPointerLeave={endDrag}
+              >
+                {/* sheets waiting underneath — back to front so the top photo lands last.
                   Pakai visibleQueue supaya konsisten dengan filter jenis media aktif. */}
-              {visibleQueue
-                .slice(1, STACK_DEPTH)
-                .map((p, i) => {
-                  const depth = i + 1; // 1..STACK_DEPTH-1
-                  const { rotate: rotSeed } = seededOffset(p.path, depth);
-                  // Tampilkan thumbnail asli kalau sudah ter-cache (biasanya
-                  // sudah di-prefetch) dan jenisnya foto — supaya user bisa
-                  // sedikit "mengintip" foto berikutnya, bukan cuma kotak
-                  // polos. PDF/video/belum-di-cache tetap fallback polos
-                  // supaya tidak memicu loading tambahan untuk kartu belakang.
-                  const thumb =
-                    p.kind === "image"
-                      ? previewCache.current.get(p.path)
-                      : undefined;
-                  return (
+                {visibleQueue
+                  .slice(1, STACK_DEPTH)
+                  .map((p, i) => {
+                    const depth = i + 1; // 1..STACK_DEPTH-1
+                    const { rotate: rotSeed } = seededOffset(p.path, depth);
+                    // Tampilkan thumbnail asli kalau sudah ter-cache (biasanya
+                    // sudah di-prefetch) dan jenisnya foto — supaya user bisa
+                    // sedikit "mengintip" foto berikutnya, bukan cuma kotak
+                    // polos. PDF/video/belum-di-cache tetap fallback polos
+                    // supaya tidak memicu loading tambahan untuk kartu belakang.
+                    const thumb =
+                      p.kind === "image"
+                        ? previewCache.current.get(p.path)
+                        : undefined;
+                    return (
+                      <div
+                        key={p.path}
+                        className="stack-sheet"
+                        style={{
+                          // inset progresif kecil supaya kartu belakang sedikit
+                          // lebih kecil dari current (efek "resesi" alami),
+                          // tidak persis sama besar seperti sebelumnya.
+                          inset: `${depth * 2.5}%`,
+                          // translate PERSENTASE (bukan px tetap) — persentase pada
+                          // transform:translate() dihitung relatif terhadap ukuran
+                          // elemen itu SENDIRI, jadi geserannya otomatis proporsional
+                          // baik untuk kartu portrait sempit maupun landscape lebar,
+                          // tidak lagi "tenggelam" pada kartu besar atau "terbang
+                          // jauh" pada kartu ekstrem seperti versi px tetap.
+                          transform: `translate(${-(depth * 7)}%, ${-(depth * 7)}%) rotate(${-(depth * 3) + rotSeed * 0.5}deg)`,
+                          transformOrigin: "80% 80%",
+                          zIndex: STACK_DEPTH - depth,
+                          opacity: 1 - depth * 0.14,
+                          ["--depth-blur" as string]: `${depth * 0.3}px`,
+                          ["--depth-shadow-y" as string]: `${2 + depth * 2}px`,
+                          ["--depth-shadow-blur" as string]: `${8 + depth * 4}px`,
+                        }}
+                        aria-hidden="true"
+                      >
+                        <div className="stack-sheet-inner">
+                          {thumb && (
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="stack-sheet-thumb"
+                              draggable={false}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                  .reverse()}
+
+                {loadingPreview && (
+                  <div
+                    className="preview-placeholder"
+                    style={{ zIndex: STACK_DEPTH + 1 }}
+                  >
+                    <span className="loading-ticks" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    Memuat preview…
+                  </div>
+                )}
+
+                {!loadingPreview &&
+                  (previewSrc ||
+                    current?.kind === "pdf" ||
+                    current?.kind === "video") && (
                     <div
-                      key={p.path}
-                      className="stack-sheet"
-                      style={{
-                        // inset progresif kecil supaya kartu belakang sedikit
-                        // lebih kecil dari current (efek "resesi" alami),
-                        // tidak persis sama besar seperti sebelumnya.
-                        inset: `${depth * 2.5}%`,
-                        // translate PERSENTASE (bukan px tetap) — persentase pada
-                        // transform:translate() dihitung relatif terhadap ukuran
-                        // elemen itu SENDIRI, jadi geserannya otomatis proporsional
-                        // baik untuk kartu portrait sempit maupun landscape lebar,
-                        // tidak lagi "tenggelam" pada kartu besar atau "terbang
-                        // jauh" pada kartu ekstrem seperti versi px tetap.
-                        transform: `translate(${-(depth * 7)}%, ${-(depth * 7)}%) rotate(${-(depth * 3) + rotSeed * 0.5}deg)`,
-                        transformOrigin: "80% 80%",
-                        zIndex: STACK_DEPTH - depth,
-                        opacity: 1 - depth * 0.14,
-                        ["--depth-blur" as string]: `${depth * 0.3}px`,
-                        ["--depth-shadow-y" as string]: `${2 + depth * 2}px`,
-                        ["--depth-shadow-blur" as string]: `${8 + depth * 4}px`,
-                      }}
-                      aria-hidden="true"
+                      ref={cardRef}
+                      className={
+                        "preview-card" +
+                        (isSettling ? " settling" : "") +
+                        (exitDir === "left" ? " exit-left" : "") +
+                        (exitDir === "right" ? " exit-right" : "")
+                      }
+                      style={
+                        isExiting
+                          ? ({
+                              "--start-x": `${exitStartX}px`,
+                              "--start-rot": `${exitStartRot}deg`,
+                              zIndex: STACK_DEPTH + 1,
+                            } as React.CSSProperties)
+                          : {
+                              transform: `translateX(${dragX}px) rotate(${rotation}deg)`,
+                              zIndex: STACK_DEPTH + 1,
+                            }
+                      }
+                      onAnimationEnd={handleExitAnimationEnd}
                     >
-                      <div className="stack-sheet-inner">
-                        {thumb && (
+                      <div
+                        className={
+                          "preview-photo-inner" +
+                          (current?.kind === "pdf" || current?.kind === "video"
+                            ? " is-clickable"
+                            : "")
+                        }
+                        style={
+                          currentAspectRatio
+                            ? { aspectRatio: `${currentAspectRatio}` }
+                            : undefined
+                        }
+                        onClick={() => {
+                          if (
+                            current &&
+                            (current.kind === "pdf" || current.kind === "video")
+                          ) {
+                            setFullViewPhoto(current);
+                          }
+                        }}
+                      >
+                        {current?.kind === "pdf" ? (
+                          <PdfViewer
+                            path={current.path}
+                            compact
+                            onDimensionsChange={setCurrentAspectRatio}
+                          />
+                        ) : current?.kind === "video" ? (
+                          <VideoViewer
+                            path={current.path}
+                            compact
+                            onDimensionsChange={setCurrentAspectRatio}
+                          />
+                        ) : (
                           <img
-                            src={thumb}
-                            alt=""
-                            className="stack-sheet-thumb"
+                            src={previewSrc}
+                            alt={current?.name}
+                            className="preview-img"
                             draggable={false}
+                            onLoad={(e) => {
+                              const img = e.currentTarget;
+                              if (img.naturalWidth && img.naturalHeight) {
+                                setCurrentAspectRatio(
+                                  img.naturalWidth / img.naturalHeight,
+                                );
+                              }
+                            }}
                           />
                         )}
                       </div>
+                      {current && (
+                        <span className="frame-counter mono">
+                          {String(frameNumber).padStart(3, "0")} /{" "}
+                          {String(totalLoaded).padStart(3, "0")}
+                        </span>
+                      )}
                     </div>
-                  );
-                })
-                .reverse()}
-
-              {loadingPreview && (
-                <div
-                  className="preview-placeholder"
-                  style={{ zIndex: STACK_DEPTH + 1 }}
-                >
-                  <span className="loading-ticks" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
-                  </span>
-                  Memuat preview…
-                </div>
-              )}
-
-              {!loadingPreview && (previewSrc || current?.kind === "pdf" || current?.kind === "video") && (
-                <div
-                  ref={cardRef}
-                  className={
-                    "preview-card" +
-                    (isSettling ? " settling" : "") +
-                    (exitDir === "left" ? " exit-left" : "") +
-                    (exitDir === "right" ? " exit-right" : "")
-                  }
-                  style={
-                    isExiting
-                      ? ({
-                          "--start-x": `${exitStartX}px`,
-                          "--start-rot": `${exitStartRot}deg`,
-                          zIndex: STACK_DEPTH + 1,
-                        } as React.CSSProperties)
-                      : {
-                          transform: `translateX(${dragX}px) rotate(${rotation}deg)`,
-                          zIndex: STACK_DEPTH + 1,
-                        }
-                  }
-                  onAnimationEnd={handleExitAnimationEnd}
-                >
-                  <div
-                    className={
-                      "preview-photo-inner" +
-                      (current?.kind === "pdf" || current?.kind === "video"
-                        ? " is-clickable"
-                        : "")
-                    }
-                    style={
-                      currentAspectRatio
-                        ? { aspectRatio: `${currentAspectRatio}` }
-                        : undefined
-                    }
-                    onClick={() => {
-                      if (
-                        current &&
-                        (current.kind === "pdf" || current.kind === "video")
-                      ) {
-                        setFullViewPhoto(current);
-                      }
-                    }}
-                  >
-                    {current?.kind === "pdf" ? (
-                      <PdfViewer
-                        path={current.path}
-                        compact
-                        onDimensionsChange={setCurrentAspectRatio}
-                      />
-                    ) : current?.kind === "video" ? (
-                      <VideoViewer
-                        path={current.path}
-                        compact
-                        onDimensionsChange={setCurrentAspectRatio}
-                      />
-                    ) : (
-                      <img
-                        src={previewSrc}
-                        alt={current?.name}
-                        className="preview-img"
-                        draggable={false}
-                        onLoad={(e) => {
-                          const img = e.currentTarget;
-                          if (img.naturalWidth && img.naturalHeight) {
-                            setCurrentAspectRatio(
-                              img.naturalWidth / img.naturalHeight,
-                            );
-                          }
-                        }}
-                      />
-                    )}
-                  </div>
-                  {current && (
-                    <span className="frame-counter mono">
-                      {String(frameNumber).padStart(3, "0")} /{" "}
-                      {String(totalLoaded).padStart(3, "0")}
-                    </span>
                   )}
-                </div>
-              )}
 
-              {!loadingPreview && !previewSrc && queue.length === 0 && (
-                <div
-                  className="preview-placeholder empty-state"
-                  style={{ zIndex: STACK_DEPTH + 1 }}
-                >
-                  <span className="empty-glyph" aria-hidden="true">
-                    <TrayGlyph large />
+                {!loadingPreview && !previewSrc && queue.length === 0 && (
+                  <div
+                    className="preview-placeholder empty-state"
+                    style={{ zIndex: STACK_DEPTH + 1 }}
+                  >
+                    <span className="empty-glyph" aria-hidden="true">
+                      <TrayGlyph large />
+                    </span>
+                    <span className="empty-title">Tumpukan habis</span>
+                    <span className="hint-inline">
+                      Klik &quot;Selesai&quot; untuk melihat hasil roll ini.
+                    </span>
+                  </div>
+                )}
+
+                {swipeProgress > 0.15 && !isExiting && (
+                  <span
+                    className="stamp stamp-select"
+                    style={{ opacity: swipeProgress }}
+                  >
+                    Pilih
                   </span>
-                  <span className="empty-title">Tumpukan habis</span>
-                  <span className="hint-inline">
-                    Klik &quot;Selesai&quot; untuk melihat hasil roll ini.
+                )}
+                {swipeProgress < -0.15 && !isExiting && (
+                  <span
+                    className="stamp stamp-reject"
+                    style={{ opacity: -swipeProgress }}
+                  >
+                    Lewati
                   </span>
-                </div>
-              )}
+                )}
+              </div>
 
-              {swipeProgress > 0.15 && !isExiting && (
-                <span
-                  className="stamp stamp-select"
-                  style={{ opacity: swipeProgress }}
-                >
-                  Pilih
-                </span>
-              )}
-              {swipeProgress < -0.15 && !isExiting && (
-                <span
-                  className="stamp stamp-reject"
-                  style={{ opacity: -swipeProgress }}
-                >
-                  Lewati
-                </span>
-              )}
+              <div className="sprocket-row" aria-hidden="true">
+                {Array.from({ length: 16 }).map((_, i) => (
+                  <span key={i} />
+                ))}
+              </div>
             </div>
-
-            <div className="sprocket-row" aria-hidden="true">
-              {Array.from({ length: 16 }).map((_, i) => (
-                <span key={i} />
-              ))}
-            </div>
-          </div>
           </div>
 
           {immersive && (
@@ -1202,22 +1241,21 @@ function App() {
           <p className="hint">
             {current?.kind === "video" ? (
               <>
-                <kbd>←</kbd> Lewati <kbd>→</kbd> Pilih —{" "}
-                <kbd>Space</kbd> Play/Pause — <kbd>J</kbd> −5s{" "}
-                <kbd>L</kbd> +5s — <kbd>↑</kbd>/<kbd>↓</kbd> Volume
+                <kbd>←</kbd> Lewati <kbd>→</kbd> Pilih — <kbd>Space</kbd>{" "}
+                Play/Pause — <kbd>J</kbd> −5s <kbd>L</kbd> +5s — <kbd>↑</kbd>/
+                <kbd>↓</kbd> Volume
               </>
             ) : current?.kind === "pdf" ? (
               <>
-                <kbd>←</kbd> Lewati <kbd>→</kbd> Pilih —{" "}
-                <kbd>↑</kbd>/<kbd>↓</kbd> Halaman — <kbd>+</kbd>/
-                <kbd>−</kbd> Zoom
+                <kbd>←</kbd> Lewati <kbd>→</kbd> Pilih — <kbd>↑</kbd>/
+                <kbd>↓</kbd> Halaman — <kbd>+</kbd>/<kbd>−</kbd> Zoom
               </>
             ) : (
               <>
                 seret foto, atau pakai <kbd>←</kbd> <kbd>→</kbd>
               </>
-            )}
-            {" "}— <kbd>⌘Z</kbd> batal — <kbd>F</kbd> layar penuh —{" "}
+            )}{" "}
+            — <kbd>⌘Z</kbd> batal — <kbd>F</kbd> layar penuh —{" "}
             <button
               type="button"
               className="hint-more-link"
@@ -1229,7 +1267,6 @@ function App() {
         </div>
 
         <aside className="side-panel">
-
           <div className="side-card">
             <div className="side-card-title">Tujuan</div>
             <div className="side-dest">
@@ -1324,10 +1361,7 @@ function App() {
           role="dialog"
           aria-modal="true"
         >
-          <div
-            className="shortcuts-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="shortcuts-modal" onClick={(e) => e.stopPropagation()}>
             <div className="shortcuts-modal-header">
               <span>Tutorial & Panduan</span>
               <button
@@ -1357,8 +1391,8 @@ function App() {
                 <div className="shortcuts-group-title">Filter Jenis Media</div>
                 <p className="tutorial-desc">
                   Tombol Semua/Foto/PDF/Video di top-bar menyaring apa yang
-                  ditampilkan di tumpukan. File jenis lain tidak hilang,
-                  cuma disembunyikan sementara.
+                  ditampilkan di tumpukan. File jenis lain tidak hilang, cuma
+                  disembunyikan sementara.
                 </p>
               </div>
               <div className="shortcuts-group">
@@ -1405,7 +1439,8 @@ function App() {
                   <kbd>Shift</kbd>+<kbd>L</kbd> <span>Maju 10 detik</span>
                 </div>
                 <div className="shortcuts-row">
-                  <kbd>↑</kbd>/<kbd>↓</kbd> <span>Naikkan / turunkan volume</span>
+                  <kbd>↑</kbd>/<kbd>↓</kbd>{" "}
+                  <span>Naikkan / turunkan volume</span>
                 </div>
               </div>
               <div className="shortcuts-group">
@@ -1423,7 +1458,8 @@ function App() {
                   <kbd>⌘/Ctrl</kbd>+<kbd>↓</kbd> <span>Jadikan patokan</span>
                 </div>
                 <div className="shortcuts-row">
-                  <kbd>⌘/Ctrl</kbd>+<kbd>↑</kbd> <span>Keluar mode banding</span>
+                  <kbd>⌘/Ctrl</kbd>+<kbd>↑</kbd>{" "}
+                  <span>Keluar mode banding</span>
                 </div>
               </div>
             </div>
