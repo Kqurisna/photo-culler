@@ -823,6 +823,8 @@ function App() {
   const percentDone = totalLoaded
     ? Math.round(((frameNumber - 1) / totalLoaded) * 100)
     : 0;
+  const reviewedCount = Math.max(0, frameNumber - 1);
+  const rejectedCount = Math.max(0, reviewedCount - selectedCount);
 
   return (
     <div className={`container sorting-screen${immersive ? " immersive" : ""}`}>
