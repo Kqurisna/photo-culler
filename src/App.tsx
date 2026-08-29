@@ -91,6 +91,10 @@ function App() {
   const [trayBump, setTrayBump] = useState(false);
 
   const previewCache = useRef<Map<string, string>>(new Map());
+  // Melacak path yang gagal di-prefetch, supaya tidak dicoba berulang-ulang
+  // di setiap render (yang akan membebani backend tanpa guna kalau memang
+  // filenya konsisten gagal, misal format tidak didukung).
+  const failedPreviews = useRef<Set<string>>(new Set());
   // previewCache adalah ref (bukan state) demi performa — tapi itu artinya
   // React tidak otomatis re-render saat prefetch di background selesai
   // mengisi cache. Kartu tumpukan (stack-sheet) yang membaca cache ini saat
@@ -274,29 +278,43 @@ function App() {
         if (!cancelled) setLoadingPreview(false);
       });
 
-    // prefetch the next couple of frames so the swipe never stalls on load
-    visibleQueue.slice(1, 3).forEach((p) => {
+    // prefetch bukan cuma 2 frame ke depan, tapi sejauh STACK_DEPTH — supaya
+    // skip cepat berkali-kali tidak membuat kartu belakang kehabisan
+    // thumbnail yang belum sempat di-prefetch.
+    visibleQueue.slice(1, STACK_DEPTH + 1).forEach((p) => {
       if (
         p.kind !== "pdf" &&
         p.kind !== "video" &&
-        !previewCache.current.has(p.path)
+        !previewCache.current.has(p.path) &&
+        !failedPreviews.current.has(p.path)
       ) {
+        console.log(`[DIAG] Memulai prefetch: ${p.name}`);
         invoke<string>("get_preview", { path: p.path })
           .then((dataUrl) => {
+            console.log(`[DIAG] Prefetch BERHASIL: ${p.name}, len=${dataUrl?.length}`);
             cacheSet(previewCache.current, p.path, dataUrl);
-            // Cache-nya ref, jadi paksa re-render supaya kartu tumpukan
-            // (stack-sheet) yang butuh thumbnail ini langsung terupdate,
-            // bukan menunggu re-render lain yang kebetulan lewat.
             forceCacheRerender();
           })
-          .catch(() => {});
+          .catch((e) => {
+            console.warn(`[DIAG] Prefetch GAGAL: ${p.name}:`, e);
+            failedPreviews.current.add(p.path);
+          });
       }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [visibleQueue[0]?.path, visibleQueue.length, stage, pushToast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    visibleQueue[0]?.path,
+    visibleQueue[1]?.path,
+    visibleQueue[2]?.path,
+    visibleQueue[3]?.path,
+    visibleQueue.length,
+    stage,
+    pushToast,
+  ]);
 
   const recordHistory = useCallback((entry: HistoryEntry) => {
     history.current = [...history.current, entry].slice(-HISTORY_LIMIT);
