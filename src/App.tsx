@@ -955,9 +955,18 @@ function App() {
                       key={p.path}
                       className="stack-sheet"
                       style={{
-                        inset: "0%",
-                        transform: `translate(${-(depth * 22)}px, ${-(depth * 6)}px) rotate(${-(depth * 9) + rotSeed * 0.6}deg)`,
-                        transformOrigin: "50% 90%",
+                        // inset progresif kecil supaya kartu belakang sedikit
+                        // lebih kecil dari current (efek "resesi" alami),
+                        // tidak persis sama besar seperti sebelumnya.
+                        inset: `${depth * 2.5}%`,
+                        // translate PERSENTASE (bukan px tetap) — persentase pada
+                        // transform:translate() dihitung relatif terhadap ukuran
+                        // elemen itu SENDIRI, jadi geserannya otomatis proporsional
+                        // baik untuk kartu portrait sempit maupun landscape lebar,
+                        // tidak lagi "tenggelam" pada kartu besar atau "terbang
+                        // jauh" pada kartu ekstrem seperti versi px tetap.
+                        transform: `translate(${-(depth * 7)}%, ${-(depth * 7)}%) rotate(${-(depth * 3) + rotSeed * 0.5}deg)`,
+                        transformOrigin: "80% 80%",
                         zIndex: STACK_DEPTH - depth,
                         opacity: 1 - depth * 0.14,
                         ["--depth-blur" as string]: `${depth * 0.3}px`,
@@ -966,14 +975,7 @@ function App() {
                       }}
                       aria-hidden="true"
                     >
-                      <div
-                        className="stack-sheet-inner"
-                        style={
-                          currentAspectRatio
-                            ? { aspectRatio: `${currentAspectRatio}` }
-                            : undefined
-                        }
-                      >
+                      <div className="stack-sheet-inner">
                         {thumb && (
                           <img
                             src={thumb}
