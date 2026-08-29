@@ -107,6 +107,9 @@ function App() {
   // Lebar kotak patokan (kiri) dalam persen dari total lebar compare-stage.
   // Diubah lewat drag pada resize handle di antara kotak kiri-kanan.
   const [referenceWidthPct, setReferenceWidthPct] = useState(50);
+  // Modal referensi lengkap semua keyboard shortcut, dibuka lewat tombol "?"
+  // atau tombol keyboard "?" itu sendiri.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Rasio lebar/tinggi asli media yang sedang tampil — dipakai supaya
   // bingkai foto (preview-photo-inner) dan kotak patokan (compare-reference-box)
   // "memeluk" bentuk asli media (persegi panjang lebar untuk PDF/foto
@@ -559,19 +562,29 @@ function App() {
     if (stage !== "sorting") return;
 
     const handler = (e: KeyboardEvent) => {
+      const cmdOrCtrl = e.metaKey || e.ctrlKey;
+      const target = e.target as HTMLElement | null;
+      const isTypingTarget =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      if (isTypingTarget) return;
+
+
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         triggerExit("left");
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         triggerExit("right");
-      } else if (e.key === "ArrowDown") {
+      } else if (e.key === "ArrowDown" && cmdOrCtrl) {
         e.preventDefault();
         if (!compareMode && visibleQueue[0] && exitDir === null) {
           setReferencePhoto(visibleQueue[0]);
           setCompareMode(true);
         }
-      } else if (e.key === "ArrowUp") {
+      } else if (e.key === "ArrowUp" && cmdOrCtrl) {
         e.preventDefault();
         if (compareMode) {
           setCompareMode(false);
@@ -589,12 +602,18 @@ function App() {
       } else if (e.key === "Escape" && immersive) {
         e.preventDefault();
         toggleImmersive();
+      } else if (e.key === "Escape" && shortcutsOpen) {
+        e.preventDefault();
+        setShortcutsOpen(false);
+      } else if (e.key === "?") {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [stage, triggerExit, handleUndo, toggleImmersive, immersive, compareMode, visibleQueue, exitDir]);
+  }, [stage, triggerExit, handleUndo, toggleImmersive, immersive, compareMode, visibleQueue, exitDir, shortcutsOpen]);
 
   const finishSorting = () => {
     setStage("done");
@@ -819,6 +838,13 @@ function App() {
             title="Layar penuh (F)"
           >
             Penuh
+          </button>
+          <button
+            className="ghost-btn"
+            onClick={() => setShortcutsOpen(true)}
+            title="Lihat semua shortcut keyboard"
+          >
+            ?
           </button>
           <button onClick={finishSorting}>Selesai</button>
         </div>
@@ -1107,8 +1133,31 @@ function App() {
           </div>
 
           <p className="hint">
-            seret foto, atau pakai <kbd>←</kbd> <kbd>→</kbd> — <kbd>⌘Z</kbd>{" "}
-            batal — <kbd>F</kbd> layar penuh
+            {current?.kind === "video" ? (
+              <>
+                <kbd>←</kbd> Lewati <kbd>→</kbd> Pilih —{" "}
+                <kbd>Space</kbd> Play/Pause — <kbd>J</kbd> −5s{" "}
+                <kbd>L</kbd> +5s — <kbd>↑</kbd>/<kbd>↓</kbd> Volume
+              </>
+            ) : current?.kind === "pdf" ? (
+              <>
+                <kbd>←</kbd> Lewati <kbd>→</kbd> Pilih —{" "}
+                <kbd>↑</kbd>/<kbd>↓</kbd> Halaman — <kbd>+</kbd>/
+                <kbd>−</kbd> Zoom
+              </>
+            ) : (
+              <>
+                seret foto, atau pakai <kbd>←</kbd> <kbd>→</kbd>
+              </>
+            )}
+            {" "}— <kbd>⌘Z</kbd> batal — <kbd>F</kbd> layar penuh —{" "}
+            <button
+              type="button"
+              className="hint-more-link"
+              onClick={() => setShortcutsOpen(true)}
+            >
+              semua shortcut
+            </button>
           </p>
         </div>
 
@@ -1242,6 +1291,91 @@ function App() {
       </div>
 
       {/* PDF full viewer — dibuka dari tombol "Lihat PDF" */}
+      {shortcutsOpen && (
+        <div
+          className="shortcuts-modal-backdrop"
+          onClick={() => setShortcutsOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="shortcuts-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="shortcuts-modal-header">
+              <span>Keyboard Shortcuts</span>
+              <button
+                type="button"
+                className="photo-lightbox-close"
+                onClick={() => setShortcutsOpen(false)}
+                aria-label="Tutup"
+              >
+                ×
+              </button>
+            </div>
+            <div className="shortcuts-modal-body">
+              <div className="shortcuts-group">
+                <div className="shortcuts-group-title">Umum</div>
+                <div className="shortcuts-row">
+                  <kbd>←</kbd> <span>Skip / masukkan kembali ke Queue</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>→</kbd> <span>Select / masukkan ke Selected</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>Esc</kbd> <span>Kembali</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>Enter</kbd> <span>Konfirmasi</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>⌘/Ctrl</kbd>+<kbd>Z</kbd> <span>Undo aksi terakhir</span>
+                </div>
+              </div>
+              <div className="shortcuts-group">
+                <div className="shortcuts-group-title">Video</div>
+                <div className="shortcuts-row">
+                  <kbd>Space</kbd> <span>Play / Pause</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>J</kbd> <span>Mundur 5 detik</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>L</kbd> <span>Maju 5 detik</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>Shift</kbd>+<kbd>J</kbd> <span>Mundur 10 detik</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>Shift</kbd>+<kbd>L</kbd> <span>Maju 10 detik</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>↑</kbd>/<kbd>↓</kbd> <span>Naikkan / turunkan volume</span>
+                </div>
+              </div>
+              <div className="shortcuts-group">
+                <div className="shortcuts-group-title">PDF</div>
+                <div className="shortcuts-row">
+                  <kbd>↑</kbd>/<kbd>↓</kbd> <span>Navigasi halaman</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>+</kbd>/<kbd>−</kbd> <span>Zoom in / out</span>
+                </div>
+              </div>
+              <div className="shortcuts-group">
+                <div className="shortcuts-group-title">Mode Banding</div>
+                <div className="shortcuts-row">
+                  <kbd>⌘/Ctrl</kbd>+<kbd>↓</kbd> <span>Jadikan patokan</span>
+                </div>
+                <div className="shortcuts-row">
+                  <kbd>⌘/Ctrl</kbd>+<kbd>↑</kbd> <span>Keluar mode banding</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {fullViewPhoto && (
         <div
           className="photo-lightbox"
