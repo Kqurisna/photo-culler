@@ -1227,6 +1227,9 @@ button:disabled {
   width: 100vw;
   padding: 0;
   gap: 0;
+  overflow: hidden; /* pengaman ganda — pastikan tidak ada scroll sama
+     sekali di fullscreen, terlepas dari fallback overflow-y:auto di
+     .container untuk kondisi window sangat kecil */
 }
 
 .sorting-screen.immersive .top-bar {
@@ -1265,6 +1268,11 @@ button:disabled {
 
 .sorting-screen.immersive .preview-box {
   height: 100vh;
+  margin-top: 0; /* reset — margin-top 56px (ruang untuk kartu tumpukan
+     "nongol" di mode normal) sebelumnya tidak direset di sini, sehingga
+     total tinggi jadi 100vh + 56px dan memicu scroll tak diinginkan di
+     fullscreen. Kartu preview jadi sedikit lebih kecil untuk menyesuaikan,
+     yang tidak masalah demi mengunci layout pas tanpa scroll. */
   border: none;
 }
 
