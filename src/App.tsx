@@ -523,7 +523,12 @@ function App() {
   // triggers just start from 0 (center). ---
   const triggerExit = useCallback(
     (direction: "left" | "right", startX = 0, startRot = 0) => {
-      if (queue.length === 0 || isProcessing || exitDir) return;
+      // loadingPreview: jangan biarkan user swipe kartu yang gambarnya
+      // sendiri belum selesai dimuat (baik via tombol maupun keyboard) —
+      // mencegah kebingungan "kartu hilang" karena foto belum sempat
+      // tampil sebelum di-skip/pilih.
+      if (queue.length === 0 || isProcessing || exitDir || loadingPreview)
+        return;
       dragging.current = false;
       setIsSettling(false);
       setExitStartX(startX);
@@ -536,7 +541,7 @@ function App() {
         handleExitAnimationEndRef.current();
       }, 600);
     },
-    [queue.length, isProcessing, exitDir],
+    [queue.length, isProcessing, exitDir, loadingPreview],
   );
 
   // --- Called once the CSS exit animation finishes: commit the real

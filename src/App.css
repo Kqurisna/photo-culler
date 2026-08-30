@@ -584,6 +584,15 @@ button:disabled {
      yang inset%-nya sudah membatasi area), dan aspect-ratio default 3/4
      dipasang sebagai fallback SEBELUM inline style override begitu foto
      selesai load — supaya kartu tidak collapse ke 0 di awal. */
+  /* aspect-ratio SELALU ada (3/4 default di sini, ditimpa inline style
+     begitu rasio asli diketahui) — itu sudah cukup jadi "acuan ukuran"
+     bagi box, jadi width & height boleh sama-sama auto tanpa risiko
+     collapse ke 0. JANGAN paksa salah satu sisi jadi definit (mis.
+     height:100%) — itu bikin aspect-ratio cuma berlaku sepihak: begitu
+     max-width mengklem lebar, tinggi tidak ikut menyesuaikan, sehingga
+     box selalu jadi kotak sementara foto di dalamnya (object-fit:contain)
+     ter-letterbox. Pola auto/auto + max-width/max-height ini sama persis
+     dengan .preview-photo-inner yang sudah benar di kartu depan. */
   aspect-ratio: 3 / 4;
   width: auto;
   height: auto;
