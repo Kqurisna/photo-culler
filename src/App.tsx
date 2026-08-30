@@ -142,6 +142,13 @@ function App() {
   const [currentAspectRatio, setCurrentAspectRatio] = useState<number | null>(
     null,
   );
+  // Rasio lebar/tinggi per-item untuk kartu tumpukan di belakang current,
+  // dikunci per path (bukan satu nilai global) karena beberapa kartu
+  // belakang bisa tampil sekaligus, masing-masing rasio beda. Diisi
+  // lewat onLoad <img> thumbnail di stack-sheet.
+  const [stackAspectRatios, setStackAspectRatios] = useState<
+    Record<string, number>
+  >({});
   const [referenceAspectRatio, setReferenceAspectRatio] = useState<
     number | null
   >(null);
@@ -1039,13 +1046,33 @@ function App() {
                         }}
                         aria-hidden="true"
                       >
-                        <div className="stack-sheet-inner">
+                        <div
+                          className="stack-sheet-inner"
+                          style={
+                            stackAspectRatios[p.path]
+                              ? { aspectRatio: `${stackAspectRatios[p.path]}` }
+                              : undefined
+                          }
+                        >
                           {thumb && (
                             <img
                               src={thumb}
                               alt=""
                               className="stack-sheet-thumb"
                               draggable={false}
+                              onLoad={(e) => {
+                                const img = e.currentTarget;
+                                if (
+                                  img.naturalWidth &&
+                                  img.naturalHeight &&
+                                  !stackAspectRatios[p.path]
+                                ) {
+                                  setStackAspectRatios((prev) => ({
+                                    ...prev,
+                                    [p.path]: img.naturalWidth / img.naturalHeight,
+                                  }));
+                                }
+                              }}
                             />
                           )}
                         </div>

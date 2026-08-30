@@ -563,7 +563,8 @@ button:disabled {
      murni composite; efek "mengecil ke belakang" sekarang sepenuhnya
      lewat scale() di transform, yang GPU-accelerated. */
   display: flex;
-  align-items: center;
+  align-items: center; /* jangan stretch stack-sheet-inner — biar
+     aspect-ratio-nya "hug" bentuk foto seperti preview-photo-inner */
   justify-content: center;
   will-change: transform, opacity;
   transition:
@@ -574,17 +575,20 @@ button:disabled {
 }
 
 .stack-sheet-inner {
-  /* Sengaja TIDAK mengikuti aspect-ratio media asli — kartu ini cuma
-     indikator "masih ada foto berikutnya", bukan preview akurat. Ia
-     mengisi penuh area yang sudah ditentukan oleh inset% pada .stack-sheet
-     (mengikuti bentuk preview-box), supaya ukurannya konsisten & rapi
-     untuk media rasio apa pun (screenshot HP tegak, landscape, dll). */
-  width: 100%;
-  height: 100%;
-  /* surface-sunken (bukan surface/putih polos) + border lebih tegas —
-     supaya kartu tetap terlihat jelas SEBELUM thumbnail-nya ter-cache
-     (mis. saat baru buka roll), bukan cuma kotak putih nyaris tak
-     kasat mata di atas background yang juga terang. */
+  /* MENGIKUTI aspect-ratio foto asli (via inline style dari
+     stackAspectRatios di App.tsx) begitu thumbnail-nya selesai load.
+     PENTING: width & height TIDAK BOLEH sama-sama didefinisikan eksplisit
+     (mis. 100%/100%) — menurut spesifikasi CSS, aspect-ratio DIABAIKAN
+     kalau width dan height keduanya sudah definite. Jadi di sini width/
+     height:auto (dibatasi max-width/max-height:100% dari .stack-sheet
+     yang inset%-nya sudah membatasi area), dan aspect-ratio default 3/4
+     dipasang sebagai fallback SEBELUM inline style override begitu foto
+     selesai load — supaya kartu tidak collapse ke 0 di awal. */
+  aspect-ratio: 3 / 4;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
   background: var(--surface-sunken);
   border: 1px solid var(--border-strong);
   border-radius: 9px;
@@ -592,6 +596,9 @@ button:disabled {
     rgba(20, 20, 15, 0.09);
   overflow: hidden;
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .preview-card {
