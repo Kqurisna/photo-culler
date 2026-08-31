@@ -65,6 +65,32 @@ function cacheSet(
 
 let toastId = 0;
 
+// Spinner yang baru dirender setelah delay (default 500ms) sejak elemen
+// ini dimount — mencegah "flash" spinner untuk loading yang cepat selesai.
+// Kalau parent-nya unmount komponen ini sebelum delay habis (mis. loading
+// selesai duluan), spinner tidak akan sempat terlihat sama sekali.
+function DelayedSpinner({
+  delay = 500,
+  size,
+  stroke,
+  speed,
+  color,
+}: {
+  delay?: number;
+  size: string;
+  stroke: string;
+  speed: string;
+  color: string;
+}) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setShow(true), delay);
+    return () => window.clearTimeout(t);
+  }, [delay]);
+  if (!show) return null;
+  return <l-tail-spin size={size} stroke={stroke} speed={speed} color={color} />;
+}
+
 function App() {
   const [stage, setStage] = useState<Stage>("setup");
   const [sourceFolder, setSourceFolder] = useState<string>("");
@@ -1059,6 +1085,14 @@ function App() {
                               : undefined
                           }
                         >
+                          {!thumb && p.kind === "image" && (
+                            <l-tail-spin
+                              size="18"
+                              stroke="2.5"
+                              speed="0.9"
+                              color="#8c8b84"
+                            />
+                          )}
                           {thumb && (
                             <img
                               src={thumb}
@@ -1091,11 +1125,12 @@ function App() {
                     className="preview-placeholder"
                     style={{ zIndex: STACK_DEPTH + 1 }}
                   >
-                    <span className="loading-ticks" aria-hidden="true">
-                      <span />
-                      <span />
-                      <span />
-                    </span>
+                    <DelayedSpinner
+                      size="28"
+                      stroke="3"
+                      speed="0.9"
+                      color="#3452ff"
+                    />
                     Memuat preview…
                   </div>
                 )}
