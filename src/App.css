@@ -594,7 +594,7 @@ button:disabled {
      ter-letterbox. Pola auto/auto + max-width/max-height ini sama persis
      dengan .preview-photo-inner yang sudah benar di kartu depan. */
   aspect-ratio: 3 / 4;
-  width: auto;
+  width: 100%;
   height: auto;
   max-width: 100%;
   max-height: 100%;
@@ -1964,8 +1964,24 @@ button:disabled {
   height: 100%;
   object-fit: contain;
   border-radius: 8px;
-  opacity: 0.82;
   filter: saturate(0.85) brightness(0.98);
+  /* Fade-in halus dari placeholder kosong ke thumbnail asli — dimulai
+     dari opacity:0, ditransisikan ke opacity akhir (0.82) begitu class
+     is-loaded ditambahkan (selalu ada bersamaan dengan render <img>,
+     tapi transition tetap terpicu karena browser sempat render 1 frame
+     di opacity:0 dulu berkat urutan mount). */
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.stack-sheet-thumb.is-loaded {
+  opacity: 0.82;
+}
+
+.stack-sheet-error {
+  font-size: 16px;
+  color: var(--reject);
+  opacity: 0.7;
 }
 
 .tutorial-desc {

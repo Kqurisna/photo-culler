@@ -351,6 +351,10 @@ function App() {
           .catch((e) => {
             console.warn(`[DIAG] Prefetch GAGAL: ${p.name}:`, e);
             failedPreviews.current.add(p.path);
+            // Bump re-render supaya kartu belakang keluar dari state
+            // spinner dan pindah ke error-state, bukan terjebak loading
+            // selamanya (previewCache ref tidak memicu re-render sendiri).
+            forceCacheRerender();
           });
       }
     });
@@ -1085,19 +1089,31 @@ function App() {
                               : undefined
                           }
                         >
-                          {!thumb && p.kind === "image" && (
-                            <l-tail-spin
-                              size="18"
-                              stroke="2.5"
-                              speed="0.9"
-                              color="#8c8b84"
-                            />
-                          )}
+                          {!thumb &&
+                            p.kind === "image" &&
+                            !failedPreviews.current.has(p.path) && (
+                              <l-tail-spin
+                                size="18"
+                                stroke="2.5"
+                                speed="0.9"
+                                color="#8c8b84"
+                              />
+                            )}
+                          {!thumb &&
+                            p.kind === "image" &&
+                            failedPreviews.current.has(p.path) && (
+                              <span
+                                className="stack-sheet-error"
+                                aria-hidden="true"
+                              >
+                                ⚠
+                              </span>
+                            )}
                           {thumb && (
                             <img
                               src={thumb}
                               alt=""
-                              className="stack-sheet-thumb"
+                              className="stack-sheet-thumb is-loaded"
                               draggable={false}
                               onLoad={(e) => {
                                 const img = e.currentTarget;
