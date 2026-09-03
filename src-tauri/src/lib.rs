@@ -1,4 +1,8 @@
 use serde::Serialize;
+mod cache;
+use cache::{CacheIndex, PREVIEW_VERSION};
+use std::time::UNIX_EPOCH;
+use tauri::AppHandle;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -65,13 +69,89 @@ fn list_photos(folder: String) -> Result<Vec<PhotoEntry>, String> {
     Ok(entries)
 }
 
+#[derive(Serialize, Clone)]
+struct MediaIndexEntry {
+    path: String,
+    name: String,
+    kind: String,
+    size: u64,
+    modified: u64,
+    // true jika sudah ada entry cache valid untuk file ini (size, modified,
+    // dan preview_version cocok). STEP 3 hanya MENANDAI ini — belum
+    // men-generate preview untuk yang false (itu tugas STEP 5).
+    cached: bool,
+}
+
+// Scan folder + tandai per-file apakah preview-nya sudah valid di cache
+// disk. Tidak men-generate apa pun di sini — murni membaca metadata file
+// dan membandingkan dengan index.json yang ada.
+#[tauri::command]
+fn scan_media(folder: String, app: AppHandle) -> Result<Vec<MediaIndexEntry>, String> {
+    let dir = Path::new(&folder);
+    if !dir.is_dir() {
+        return Err("Folder tidak valid".into());
+    }
+
+    let index: CacheIndex = cache::load_index(&app);
+    let mut entries: Vec<MediaIndexEntry> = Vec::new();
+
+    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = match path.extension().and_then(|e| e.to_str()) {
+            Some(e) => e.to_lowercase(),
+            None => continue,
+        };
+        let kind = match kind_for_ext(&ext) {
+            Some(k) => k,
+            None => continue,
+        };
+
+        let metadata = entry.metadata().map_err(|e| e.to_string())?;
+        let size = metadata.len();
+        let modified = metadata
+            .modified()
+            .ok()
+            .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        let path_str = path.to_string_lossy().to_string();
+        let cached = index
+            .get(&path_str)
+            .map(|e| {
+                e.size == size && e.modified == modified && e.preview_version == PREVIEW_VERSION
+            })
+            .unwrap_or(false);
+
+        entries.push(MediaIndexEntry {
+            path: path_str,
+            name: path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
+            kind: kind.to_string(),
+            size,
+            modified,
+            cached,
+        });
+    }
+
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(entries)
+}
+
 // 2. Generate preview base64 JPG.
 //    PDF dan video TIDAK direct render di sini — itu tugas PdfViewer /
 //    VideoViewer di frontend (pdfjs-dist / convertFileSrc). Fungsi ini
 //    mengembalikan error khusus supaya App.tsx skip stack-preview untuk
 //    keduanya dan biarkan komponen viewer masing-masing yang menangani.
 #[tauri::command]
-fn get_preview(path: String) -> Result<String, String> {
+fn get_preview(path: String, app: AppHandle) -> Result<String, String> {
     let p = Path::new(&path);
     let ext = p
         .extension()
@@ -87,43 +167,91 @@ fn get_preview(path: String) -> Result<String, String> {
         return Err("VIDEO_PREVIEW_UNSUPPORTED".into());
     }
 
-    if STANDARD_EXT.contains(&ext.as_str()) {
-        let bytes = fs::read(p).map_err(|e| e.to_string())?;
-        let b64 = general_purpose::STANDARD.encode(bytes);
-        let mime = if ext == "png" { "image/png" } else { "image/jpeg" };
-        return Ok(format!("data:{};base64,{}", mime, b64));
+    // --- Metadata file saat ini, dipakai untuk validasi cache ---
+    let metadata = fs::metadata(p).map_err(|e| e.to_string())?;
+    let size = metadata.len();
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    // --- Cek disk cache dulu sebelum generate ulang ---
+    let index = cache::load_index(&app);
+    if let Some(entry) = index.get(&path) {
+        if entry.size == size
+            && entry.modified == modified
+            && entry.preview_version == PREVIEW_VERSION
+        {
+            if let Ok(thumb) = cache::thumb_path(&app, &path) {
+                if let Ok(bytes) = fs::read(&thumb) {
+                    let b64 = general_purpose::STANDARD.encode(bytes);
+                    return Ok(format!("data:image/jpeg;base64,{}", b64));
+                }
+                // Index bilang valid tapi file thumbnail hilang (mis.
+                // dihapus manual) -> jangan error, jatuh ke generate ulang.
+            }
+        }
     }
 
-    // Untuk HEIC/RAW -> convert ke JPG sementara pakai `sips`
-    let tmp_dir = std::env::temp_dir().join("photo-culler-preview");
-    fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
+    // --- Cache miss / invalid: generate preview ---
+    let bytes: Vec<u8> = if ext == "jpg" || ext == "jpeg" {
+        fs::read(p).map_err(|e| e.to_string())?
+    } else {
+        // PNG/TIFF/BMP/HEIC/RAW disamakan lewat `sips` -> JPG, supaya file
+        // yang tersimpan di disk cache konsisten satu format.
+        let tmp_dir = std::env::temp_dir().join("photo-culler-preview");
+        fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
 
-    let file_stem = p
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("preview");
-    let out_path = tmp_dir.join(format!("{}.jpg", file_stem));
+        let file_stem = p
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("preview");
+        let out_path = tmp_dir.join(format!("{}.jpg", file_stem));
 
-    let output = Command::new("sips")
-        .args([
-            "-s",
-            "format",
-            "jpeg",
-            path.as_str(),
-            "--out",
-            out_path.to_str().unwrap(),
-        ])
-        .output()
-        .map_err(|e| format!("Gagal menjalankan sips: {}", e))?;
+        let output = Command::new("sips")
+            .args([
+                "-s",
+                "format",
+                "jpeg",
+                path.as_str(),
+                "--out",
+                out_path.to_str().unwrap(),
+            ])
+            .output()
+            .map_err(|e| format!("Gagal menjalankan sips: {}", e))?;
 
-    if !output.status.success() {
-        return Err(format!(
-            "sips gagal convert: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
+        if !output.status.success() {
+            return Err(format!(
+                "sips gagal convert: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        fs::read(&out_path).map_err(|e| e.to_string())?
+    };
+
+    // --- Simpan ke disk cache + update index. Best-effort: kalau gagal,
+    // preview tetap dikembalikan seperti biasa (caching = optimisasi,
+    // bukan syarat fitur jalan). ---
+    if let Ok(thumb) = cache::thumb_path(&app, &path) {
+        if fs::write(&thumb, &bytes).is_ok() {
+            let mut index = index;
+            index.insert(
+                path.clone(),
+                cache::CacheEntry {
+                    hash: cache::hash_path(&path),
+                    size,
+                    modified,
+                    preview_version: PREVIEW_VERSION,
+                    kind: "image".to_string(),
+                },
+            );
+            let _ = cache::save_index(&app, &index);
+        }
     }
 
-    let bytes = fs::read(&out_path).map_err(|e| e.to_string())?;
     let b64 = general_purpose::STANDARD.encode(bytes);
     Ok(format!("data:image/jpeg;base64,{}", b64))
 }
@@ -225,7 +353,8 @@ pub fn run() {
             list_photos,
             get_preview,
             get_video_thumbnail,
-            move_photo
+            move_photo,
+            scan_media
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

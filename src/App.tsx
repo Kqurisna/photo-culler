@@ -133,6 +133,11 @@ function App() {
   // di setiap render (yang akan membebani backend tanpa guna kalau memang
   // filenya konsisten gagal, misal format tidak didukung).
   const failedPreviews = useRef<Set<string>>(new Set());
+  // Menandai "generasi" prefetch massal yang sedang berjalan — dinaikkan
+  // tiap kali startSorting/resetApp dipanggil, supaya prefetch dari sesi
+  // folder sebelumnya otomatis berhenti mengisi cache begitu user pindah
+  // ke folder baru (mencegah race antara sesi lama dan baru).
+  const prefetchGeneration = useRef(0);
   // previewCache adalah ref (bukan state) demi performa — tapi itu artinya
   // React tidak otomatis re-render saat prefetch di background selesai
   // mengisi cache. Kartu tumpukan (stack-sheet) yang membaca cache ini saat
@@ -260,6 +265,57 @@ function App() {
     }
   };
 
+  // --- Prefetch background: begitu sorting dimulai, langsung mulai
+  // memuat preview SEMUA foto (bukan cuma yang dekat current), dengan
+  // concurrency terbatas supaya tidak menembak ratusan invoke sekaligus.
+  // PDF/video dilewati di sini — ditangani viewer masing-masing, bukan
+  // lewat get_preview. ---
+  const PREFETCH_CONCURRENCY = 4;
+  const prefetchAllImages = useCallback((photos: PhotoEntry[]) => {
+    const myGeneration = ++prefetchGeneration.current;
+    const targets = photos.filter(
+      (p) =>
+        p.kind === "image" &&
+        !previewCache.current.has(p.path) &&
+        !failedPreviews.current.has(p.path),
+    );
+    let cursor = 0;
+
+    const runNext = () => {
+      if (myGeneration !== prefetchGeneration.current) return; // sesi lama, hentikan
+      if (cursor >= targets.length) return;
+      const photo = targets[cursor++];
+      console.log(`[PREFETCH-ALL] Memulai: ${photo.name}`);
+      invoke<string>("get_preview", { path: photo.path })
+        .then((dataUrl) => {
+          if (myGeneration !== prefetchGeneration.current) return;
+          console.log(
+            `[PREFETCH-ALL] Berhasil: ${photo.name}, len=${dataUrl?.length}`,
+          );
+          // Limit dinaikkan seukuran batch ini supaya semua foto yang
+          // sedang di-prefetch tetap tersimpan (tidak saling meng-evict).
+          cacheSet(
+            previewCache.current,
+            photo.path,
+            dataUrl,
+            targets.length + 10,
+          );
+          forceCacheRerender();
+        })
+        .catch((e) => {
+          if (myGeneration !== prefetchGeneration.current) return;
+          console.warn(`[PREFETCH-ALL] Gagal: ${photo.name}:`, e);
+          failedPreviews.current.add(photo.path);
+          forceCacheRerender();
+        })
+        .finally(() => {
+          if (myGeneration === prefetchGeneration.current) runNext();
+        });
+    };
+
+    for (let i = 0; i < PREFETCH_CONCURRENCY; i++) runNext();
+  }, []);
+
   // --- Mulai proses: load semua foto dari folder sumber ---
   const startSorting = async () => {
     try {
@@ -277,6 +333,7 @@ function App() {
       setTotalLoaded(photos.length);
       setSelectedCount(0);
       setStage("sorting");
+      prefetchAllImages(photos);
     } catch (e) {
       pushToast(String(e));
     }
@@ -737,6 +794,7 @@ function App() {
     setSelectedPhotos([]);
     setTrayOpen(false);
     previewCache.current.clear();
+    prefetchGeneration.current++; // hentikan prefetch massal dari sesi sebelumnya
     if (immersive) toggleImmersive();
   };
 
