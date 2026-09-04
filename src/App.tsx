@@ -29,6 +29,11 @@ const SWIPE_THRESHOLD = 110;
 const VELOCITY_THRESHOLD = 0.55; // px/ms — a fast flick clears even under the distance threshold
 const STACK_DEPTH = 2; // hanya 1 sheet yang tampil membelakangi current
 const HISTORY_LIMIT = 25;
+// Harus SAMA PERSIS dengan durasi @keyframes card-pop-in di App.css
+// (animation: card-pop-in 0.32s ...). Dipakai untuk menahan guard exit
+// selama kartu baru masih dalam proses animasi "masuk", supaya swipe
+// berikutnya tidak bisa dimulai sebelum kartu baru benar-benar settle.
+const CARD_POP_IN_MS = 320;
 // Exit animation durations (320ms left / 460ms right) live in App.css as
 // `.preview-card.exit-left` / `.exit-right` — keep them in sync if changed.
 
@@ -126,6 +131,13 @@ function App() {
   const [exitDir, setExitDir] = useState<ExitDirection>(null);
   const [exitStartX, setExitStartX] = useState(0);
   const [exitStartRot, setExitStartRot] = useState(0);
+  // Guard SINKRON (bukan cuma state) — dicek & di-set SEBELUM setExitDir
+  // dipanggil. State React (`exitDir`) baru "terlihat" oleh closure lain
+  // setelah re-render, jadi kalau drag/keyboard trigger kedua datang
+  // sangat cepat (spam), closure itu bisa masih membaca exitDir lama
+  // (null) walau exit pertama sudah berjalan. Ref ini dibaca/ditulis
+  // langsung tanpa menunggu render, jadi tidak ada celah race sama sekali.
+  const exitInProgress = useRef(false);
   const [trayBump, setTrayBump] = useState(false);
 
   const previewCache = useRef<Map<string, string>>(new Map());
@@ -614,8 +626,18 @@ function App() {
       // sendiri belum selesai dimuat (baik via tombol maupun keyboard) —
       // mencegah kebingungan "kartu hilang" karena foto belum sempat
       // tampil sebelum di-skip/pilih.
-      if (queue.length === 0 || isProcessing || exitDir || loadingPreview)
+      // exitInProgress.current: guard SINKRON, dicek PALING AWAL sebelum
+      // guard lain — mencegah trigger kedua yang datang sangat cepat
+      // (spam keyboard/drag) lolos sebelum React sempat re-render exitDir.
+      if (
+        exitInProgress.current ||
+        queue.length === 0 ||
+        isProcessing ||
+        exitDir ||
+        loadingPreview
+      )
         return;
+      exitInProgress.current = true;
       dragging.current = false;
       setIsSettling(false);
       setExitStartX(startX);
@@ -646,6 +668,14 @@ function App() {
     } else if (finishedDirection === "right") {
       handleSelect(photo);
     }
+    // JANGAN lepas exitInProgress di sini. Begitu kartu lama selesai
+    // keluar, kartu BARU langsung mulai animasi "masuk" (card-pop-in,
+    // lihat App.css) selama CARD_POP_IN_MS. Gerbang baru dibuka setelah
+    // animasi masuk itu juga selesai, supaya swipe berikutnya tidak bisa
+    // memotong kartu yang masih dalam proses "muncul".
+    window.setTimeout(() => {
+      exitInProgress.current = false;
+    }, CARD_POP_IN_MS);
   }, [exitDir, visibleQueue, handleReject, handleSelect]);
 
   useEffect(() => {

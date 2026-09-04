@@ -820,11 +820,17 @@ button:disabled {
 .preview-card.exit-left {
   animation: exit-to-queue 320ms cubic-bezier(0.4, 0, 1, 1) forwards;
   z-index: 30;
+  /* Lapis pertahanan kedua (selain ref guard di App.tsx): pastikan kartu
+     yang sedang animasi keluar tidak bisa menerima pointer event apa pun
+     -- drag baru tidak bisa "menempel" ke kartu ini sementara masih
+     terbang keluar dari layar. */
+  pointer-events: none;
 }
 
 .preview-card.exit-right {
   animation: exit-to-selected 380ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
   z-index: 30;
+  pointer-events: none;
 }
 
 .filename {
