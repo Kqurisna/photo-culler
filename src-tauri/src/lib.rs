@@ -1,5 +1,40 @@
 use serde::Serialize;
 mod cache;
+
+// Batasi jumlah sips/generate preview yang jalan BERSAMAAN.
+// Current-photo request tidak lewat semaphore ini (prioritas tinggi),
+// tapi prefetch (foto di belakang) wajib antre lewat semaphore supaya
+// tidak menyaturasi thread pool dan bikin request current ikut ngantre.
+static PREVIEW_SEMAPHORE: std::sync::OnceLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
+    std::sync::OnceLock::new();
+const MAX_CONCURRENT_PREFETCH: usize = 2;
+
+struct PrefetchGuard;
+impl Drop for PrefetchGuard {
+    fn drop(&mut self) {
+        release_prefetch_slot();
+    }
+}
+fn scopeguard_release() -> PrefetchGuard {
+    PrefetchGuard
+}
+
+fn acquire_prefetch_slot() -> bool {
+    let sem = PREVIEW_SEMAPHORE.get_or_init(|| std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)));
+    let current = sem.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    if current >= MAX_CONCURRENT_PREFETCH {
+        sem.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        false
+    } else {
+        true
+    }
+}
+
+fn release_prefetch_slot() {
+    if let Some(sem) = PREVIEW_SEMAPHORE.get() {
+        sem.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
 use cache::{CacheIndex, PREVIEW_VERSION};
 use std::time::UNIX_EPOCH;
 use tauri::AppHandle;
@@ -151,7 +186,24 @@ fn scan_media(folder: String, app: AppHandle) -> Result<Vec<MediaIndexEntry>, St
 //    mengembalikan error khusus supaya App.tsx skip stack-preview untuk
 //    keduanya dan biarkan komponen viewer masing-masing yang menangani.
 #[tauri::command]
-fn get_preview(path: String, app: AppHandle) -> Result<String, String> {
+fn get_preview(path: String, app: AppHandle, is_prefetch: Option<bool>) -> Result<String, String> {
+    // Kalau ini prefetch (bukan foto current), antre lewat semaphore.
+    // Retry singkat dengan backoff kecil -- kalau tetap penuh, biarkan
+    // request ini gagal-lembut supaya tidak numpuk; frontend akan
+    // retry sendiri di render berikutnya (index berubah lagi).
+    let is_prefetch = is_prefetch.unwrap_or(false);
+    if is_prefetch {
+        let mut tries = 0;
+        while !acquire_prefetch_slot() {
+            tries += 1;
+            if tries > 20 {
+                return Err("prefetch-slot-busy".to_string());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(15));
+        }
+    }
+    let _guard = is_prefetch.then(|| scopeguard_release());
+
     let p = Path::new(&path);
     let ext = p
         .extension()
@@ -196,41 +248,44 @@ fn get_preview(path: String, app: AppHandle) -> Result<String, String> {
     }
 
     // --- Cache miss / invalid: generate preview ---
-    let bytes: Vec<u8> = if ext == "jpg" || ext == "jpeg" {
-        fs::read(p).map_err(|e| e.to_string())?
-    } else {
-        // PNG/TIFF/BMP/HEIC/RAW disamakan lewat `sips` -> JPG, supaya file
-        // yang tersimpan di disk cache konsisten satu format.
-        let tmp_dir = std::env::temp_dir().join("photo-culler-preview");
-        fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
+    // Semua ekstensi (termasuk JPG) lewat sips: resize + kompresi ke JPG.
+    // Input asli TIDAK PERNAH ditimpa -- sips selalu menulis ke --out (file temp).
+    let tmp_dir = std::env::temp_dir().join("photo-culler-preview");
+    fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
 
-        let file_stem = p
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("preview");
-        let out_path = tmp_dir.join(format!("{}.jpg", file_stem));
+    let file_stem = p
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("preview");
+    let out_path = tmp_dir.join(format!("{}.jpg", file_stem));
 
-        let output = Command::new("sips")
-            .args([
-                "-s",
-                "format",
-                "jpeg",
-                path.as_str(),
-                "--out",
-                out_path.to_str().unwrap(),
-            ])
-            .output()
-            .map_err(|e| format!("Gagal menjalankan sips: {}", e))?;
+    // -Z 2048          -> resize proporsional, sisi terpanjang max 2048px
+    // -s formatOptions -> kompresi JPEG 80% (cukup tajam untuk culling)
+    let output = Command::new("sips")
+        .args([
+            "-Z",
+            "2048",
+            "-s",
+            "format",
+            "jpeg",
+            "-s",
+            "formatOptions",
+            "80",
+            path.as_str(),
+            "--out",
+            out_path.to_str().unwrap(),
+        ])
+        .output()
+        .map_err(|e| format!("Gagal menjalankan sips: {}", e))?;
 
-        if !output.status.success() {
-            return Err(format!(
-                "sips gagal convert: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ));
-        }
+    if !output.status.success() {
+        return Err(format!(
+            "sips gagal convert: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
 
-        fs::read(&out_path).map_err(|e| e.to_string())?
-    };
+    let bytes: Vec<u8> = fs::read(&out_path).map_err(|e| e.to_string())?;
 
     // --- Simpan ke disk cache + update index. Best-effort: kalau gagal,
     // preview tetap dikembalikan seperti biasa (caching = optimisasi,

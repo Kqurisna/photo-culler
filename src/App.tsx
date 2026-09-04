@@ -421,7 +421,7 @@ function App() {
 
     let cancelled = false;
     setLoadingPreview(true);
-    invoke<string>("get_preview", { path: current.path })
+    invoke<string>("get_preview", { path: current.path, isPrefetch: false })
       .then((dataUrl) => {
         if (!cancelled) {
           cacheSet(previewCache.current, current.path, dataUrl);
@@ -446,7 +446,7 @@ function App() {
         !failedPreviews.current.has(p.path)
       ) {
         console.log(`[DIAG] Memulai prefetch: ${p.name}`);
-        invoke<string>("get_preview", { path: p.path })
+        invoke<string>("get_preview", { path: p.path, isPrefetch: true })
           .then((dataUrl) => {
             console.log(
               `[DIAG] Prefetch BERHASIL: ${p.name}, len=${dataUrl?.length}`,
