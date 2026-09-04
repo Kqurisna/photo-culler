@@ -38,7 +38,10 @@ const CARD_POP_IN_MS = 320;
 // sebelumnya (320ms kiri via exit-to-queue, 380ms kanan via
 // exit-to-selected di App.css). Dipusatkan di sini supaya HOLD_EXIT_MS
 // (ditambahkan di step berikutnya) tidak perlu hardcode terpisah.
-const NORMAL_EXIT_MS: Record<"left" | "right", number> = { left: 320, right: 380 };
+const NORMAL_EXIT_MS: Record<"left" | "right", number> = {
+  left: 320,
+  right: 380,
+};
 // Exit animation durations (320ms left / 460ms right) live in App.css as
 // `.preview-card.exit-left` / `.exit-right` — keep them in sync if changed.
 
@@ -98,7 +101,9 @@ function DelayedSpinner({
     return () => window.clearTimeout(t);
   }, [delay]);
   if (!show) return null;
-  return <l-tail-spin size={size} stroke={stroke} speed={speed} color={color} />;
+  return (
+    <l-tail-spin size={size} stroke={stroke} speed={speed} color={color} />
+  );
 }
 
 function App() {
@@ -190,6 +195,7 @@ function App() {
   // "memeluk" bentuk asli media (persegi panjang lebar untuk PDF/foto
   // landscape, tinggi untuk potret) alih-alih selalu kotak besar dengan
   // letterbox kosong di kiri-kanan/atas-bawah.
+  const [skipResizeAnim, setSkipResizeAnim] = useState(false);
   const [currentAspectRatio, setCurrentAspectRatio] = useState<number | null>(
     null,
   );
@@ -404,7 +410,30 @@ function App() {
       setPreviewSrc("");
       return;
     }
-    setCurrentAspectRatio(null); // reset — menunggu media baru selesai load
+    // Kalau foto ini sebelumnya sudah jadi stack-sheet di belakang, rasio
+    // dimensinya sudah kita tahu (dari onLoad thumbnail) -- pakai itu dulu
+    // supaya kotak current mulai dari bentuk kartu-belakang, lalu transisi
+    // smooth ke rasio aslinya (CSS transition di .preview-photo-inner).
+    //
+    // TAPI: kalau rasio kartu-belakang dan rasio final sudah mirip (mis.
+    // sama-sama landscape ~1.5), animasi resize tidak perlu jalan --
+    // selisihnya nyaris tak kelihatan dan cuma bikin terasa delay.
+    // Threshold 8% dianggap "cukup mirip, skip animasi".
+    const RESIZE_ANIM_THRESHOLD = 0.08;
+    const upcoming = visibleQueue[0];
+    const priorRatio = upcoming ? stackAspectRatios[upcoming.path] ?? null : null;
+    setCurrentAspectRatio(priorRatio);
+
+    if (priorRatio != null) {
+      const finalRatio = upcoming ? stackAspectRatios[upcoming.path] : null;
+      // finalRatio di titik ini masih sama dengan priorRatio (belum ada data
+      // baru) -- keputusan skip/animasi yang sebenarnya dilakukan di
+      // onLoad <img> current (lihat handler di bawah), karena di situlah
+      // rasio ASLI foto baru diketahui pasti. Di sini kita cuma siapkan
+      // starting point transisi.
+      void finalRatio;
+    }
+    setSkipResizeAnim(false); // default: animasi aktif, dikoreksi di onLoad
     const current = visibleQueue[0];
 
     if (current.kind === "pdf" || current.kind === "video") {
@@ -663,7 +692,12 @@ function App() {
   // hold-loop (step berikutnya) bisa memanggilnya langsung tanpa
   // mengulang guard keyboard yang tidak relevan untuknya.
   const runExit = useCallback(
-    (direction: "left" | "right", startX = 0, startRot = 0, durationMs?: number) => {
+    (
+      direction: "left" | "right",
+      startX = 0,
+      startRot = 0,
+      durationMs?: number,
+    ) => {
       exitInProgress.current = true;
       dragging.current = false;
       setIsSettling(false);
@@ -1291,7 +1325,8 @@ function App() {
                                 ) {
                                   setStackAspectRatios((prev) => ({
                                     ...prev,
-                                    [p.path]: img.naturalWidth / img.naturalHeight,
+                                    [p.path]:
+                                      img.naturalWidth / img.naturalHeight,
                                   }));
                                 }
                               }}
@@ -1350,7 +1385,8 @@ function App() {
                           "preview-photo-inner" +
                           (current?.kind === "pdf" || current?.kind === "video"
                             ? " is-clickable"
-                            : "")
+                            : "") +
+                          (skipResizeAnim ? " no-resize-anim" : "")
                         }
                         style={
                           currentAspectRatio
@@ -1387,9 +1423,21 @@ function App() {
                             onLoad={(e) => {
                               const img = e.currentTarget;
                               if (img.naturalWidth && img.naturalHeight) {
-                                setCurrentAspectRatio(
-                                  img.naturalWidth / img.naturalHeight,
-                                );
+                                const newRatio =
+                                  img.naturalWidth / img.naturalHeight;
+                                setCurrentAspectRatio((prev) => {
+                                  // Rasio mirip (selisih < 8%) -> skip animasi,
+                                  // langsung set tanpa transisi supaya tidak
+                                  // ada delay yang tidak perlu untuk foto yang
+                                  // bentuknya sudah sama dengan frame.
+                                  const RESIZE_ANIM_THRESHOLD = 0.08;
+                                  const similar =
+                                    prev != null &&
+                                    Math.abs(newRatio - prev) / prev 
+                                      RESIZE_ANIM_THRESHOLD;
+                                  setSkipResizeAnim(similar);
+                                  return newRatio;
+                                });
                               }
                             }}
                           />
@@ -1457,19 +1505,18 @@ function App() {
 
           {current && <p className="filename mono">{current.name}</p>}
 
-          {current &&
-            (current.kind === "pdf" || current.kind === "video") && (
-              <div className="controls">
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={() => setFullViewPhoto(current)}
-                  disabled={isExiting}
-                >
-                  {current.kind === "pdf" ? "Lihat PDF" : "Putar Video"}
-                </button>
-              </div>
-            )}
+          {current && (current.kind === "pdf" || current.kind === "video") && (
+            <div className="controls">
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => setFullViewPhoto(current)}
+                disabled={isExiting}
+              >
+                {current.kind === "pdf" ? "Lihat PDF" : "Putar Video"}
+              </button>
+            </div>
+          )}
         </div>
 
         <aside className="side-panel">
