@@ -20,7 +20,7 @@ type PhotoEntry = {
   kind: PhotoKind;
 };
 
-type Stage = "setup" | "sorting" | "done";
+type Stage = "setup" | "preparing" | "sorting" | "done";
 type ExitDirection = "left" | "right" | null;
 type HistoryEntry = { type: "reject" | "select"; photo: PhotoEntry };
 type Toast = { id: number; message: string };
@@ -34,6 +34,11 @@ const HISTORY_LIMIT = 25;
 // selama kartu baru masih dalam proses animasi "masuk", supaya swipe
 // berikutnya tidak bisa dimulai sebelum kartu baru benar-benar settle.
 const CARD_POP_IN_MS = 320;
+// Durasi animasi exit normal (single press) — NILAI TIDAK BERUBAH dari
+// sebelumnya (320ms kiri via exit-to-queue, 380ms kanan via
+// exit-to-selected di App.css). Dipusatkan di sini supaya HOLD_EXIT_MS
+// (ditambahkan di step berikutnya) tidak perlu hardcode terpisah.
+const NORMAL_EXIT_MS: Record<"left" | "right", number> = { left: 320, right: 380 };
 // Exit animation durations (320ms left / 460ms right) live in App.css as
 // `.preview-card.exit-left` / `.exit-right` — keep them in sync if changed.
 
@@ -106,6 +111,9 @@ function App() {
   const [mediaFilter, setMediaFilter] = useState<"all" | PhotoKind>("all");
   const [queue, setQueue] = useState<PhotoEntry[]>([]);
   const [totalLoaded, setTotalLoaded] = useState(0);
+  // Progress ASLI dari prefetch (bukan timer palsu) — ditampilkan di
+  // layar "preparing" antara klik "Mulai Sortir" dan masuk sorting.
+  const [prepareProgress, setPrepareProgress] = useState({ done: 0, total: 0 });
   const [selectedCount, setSelectedCount] = useState(0);
   const [previewSrc, setPreviewSrc] = useState<string>("");
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -283,50 +291,74 @@ function App() {
   // PDF/video dilewati di sini — ditangani viewer masing-masing, bukan
   // lewat get_preview. ---
   const PREFETCH_CONCURRENCY = 4;
-  const prefetchAllImages = useCallback((photos: PhotoEntry[]) => {
-    const myGeneration = ++prefetchGeneration.current;
-    const targets = photos.filter(
-      (p) =>
-        p.kind === "image" &&
-        !previewCache.current.has(p.path) &&
-        !failedPreviews.current.has(p.path),
-    );
-    let cursor = 0;
+  const prefetchAllImages = useCallback(
+    (
+      photos: PhotoEntry[],
+      onProgress?: (done: number, total: number) => void,
+    ): Promise<void> => {
+      const myGeneration = ++prefetchGeneration.current;
+      const targets = photos.filter(
+        (p) =>
+          p.kind === "image" &&
+          !previewCache.current.has(p.path) &&
+          !failedPreviews.current.has(p.path),
+      );
+      const total = targets.length;
+      onProgress?.(0, total);
 
-    const runNext = () => {
-      if (myGeneration !== prefetchGeneration.current) return; // sesi lama, hentikan
-      if (cursor >= targets.length) return;
-      const photo = targets[cursor++];
-      console.log(`[PREFETCH-ALL] Memulai: ${photo.name}`);
-      invoke<string>("get_preview", { path: photo.path })
-        .then((dataUrl) => {
-          if (myGeneration !== prefetchGeneration.current) return;
-          console.log(
-            `[PREFETCH-ALL] Berhasil: ${photo.name}, len=${dataUrl?.length}`,
-          );
-          // Limit dinaikkan seukuran batch ini supaya semua foto yang
-          // sedang di-prefetch tetap tersimpan (tidak saling meng-evict).
-          cacheSet(
-            previewCache.current,
-            photo.path,
-            dataUrl,
-            targets.length + 10,
-          );
-          forceCacheRerender();
-        })
-        .catch((e) => {
-          if (myGeneration !== prefetchGeneration.current) return;
-          console.warn(`[PREFETCH-ALL] Gagal: ${photo.name}:`, e);
-          failedPreviews.current.add(photo.path);
-          forceCacheRerender();
-        })
-        .finally(() => {
-          if (myGeneration === prefetchGeneration.current) runNext();
-        });
-    };
+      if (total === 0) {
+        return Promise.resolve();
+      }
 
-    for (let i = 0; i < PREFETCH_CONCURRENCY; i++) runNext();
-  }, []);
+      return new Promise((resolve) => {
+        let cursor = 0;
+        let settled = 0;
+        const finishOne = () => {
+          settled += 1;
+          onProgress?.(settled, total);
+          if (settled >= total) resolve();
+        };
+
+        const runNext = () => {
+          if (myGeneration !== prefetchGeneration.current) {
+            resolve();
+            return;
+          }
+          if (cursor >= targets.length) return;
+          const photo = targets[cursor++];
+          console.log(`[PREFETCH-ALL] Memulai: ${photo.name}`);
+          invoke<string>("get_preview", { path: photo.path })
+            .then((dataUrl) => {
+              if (myGeneration !== prefetchGeneration.current) return;
+              console.log(
+                `[PREFETCH-ALL] Berhasil: ${photo.name}, len=${dataUrl?.length}`,
+              );
+              cacheSet(
+                previewCache.current,
+                photo.path,
+                dataUrl,
+                targets.length + 10,
+              );
+              forceCacheRerender();
+            })
+            .catch((e) => {
+              if (myGeneration !== prefetchGeneration.current) return;
+              console.warn(`[PREFETCH-ALL] Gagal: ${photo.name}:`, e);
+              failedPreviews.current.add(photo.path);
+              forceCacheRerender();
+            })
+            .finally(() => {
+              if (myGeneration !== prefetchGeneration.current) return;
+              finishOne();
+              runNext();
+            });
+        };
+
+        for (let i = 0; i < PREFETCH_CONCURRENCY; i++) runNext();
+      });
+    },
+    [],
+  );
 
   // --- Mulai proses: load semua foto dari folder sumber ---
   const startSorting = async () => {
@@ -344,10 +376,15 @@ function App() {
       setQueue(photos);
       setTotalLoaded(photos.length);
       setSelectedCount(0);
+      setStage("preparing");
+      setPrepareProgress({ done: 0, total: 0 });
+      await prefetchAllImages(photos, (done, total) => {
+        setPrepareProgress({ done, total });
+      });
       setStage("sorting");
-      prefetchAllImages(photos);
     } catch (e) {
       pushToast(String(e));
+      setStage("setup");
     }
   };
 
@@ -620,6 +657,34 @@ function App() {
   // startX/startRot let a released drag continue smoothly into the
   // animation instead of jumping back to center first; keyboard/button
   // triggers just start from 0 (center). ---
+  // Eksekutor sesungguhnya — memulai animasi exit untuk SATU kartu.
+  // Tidak melakukan guard apa pun sendiri (pemanggil bertanggung jawab
+  // memastikan aman memanggil ini) — dipisah dari triggerExit supaya
+  // hold-loop (step berikutnya) bisa memanggilnya langsung tanpa
+  // mengulang guard keyboard yang tidak relevan untuknya.
+  const runExit = useCallback(
+    (direction: "left" | "right", startX = 0, startRot = 0, durationMs?: number) => {
+      exitInProgress.current = true;
+      dragging.current = false;
+      setIsSettling(false);
+      setExitStartX(startX);
+      setExitStartRot(startRot);
+      setExitDir(direction);
+      const failsafeMs = (durationMs ?? NORMAL_EXIT_MS[direction]) + 280;
+      // Failsafe: if the CSS animationend event never fires for any reason
+      // (heavy main-thread work, a video that failed to load, etc.), force
+      // the exit to complete anyway so the buttons never stay stuck disabled.
+      window.setTimeout(() => {
+        handleExitAnimationEndRef.current();
+      }, failsafeMs);
+    },
+    [],
+  );
+
+  // Gerbang publik dipanggil dari drag/keyboard (single press / spam).
+  // GUARD PERSIS SAMA seperti implementasi sebelumnya — tidak ada
+  // perubahan urutan/logic pengecekan sama sekali, hanya dipindah ke
+  // sini karena eksekusi animasinya sekarang di runExit.
   const triggerExit = useCallback(
     (direction: "left" | "right", startX = 0, startRot = 0) => {
       // loadingPreview: jangan biarkan user swipe kartu yang gambarnya
@@ -637,20 +702,9 @@ function App() {
         loadingPreview
       )
         return;
-      exitInProgress.current = true;
-      dragging.current = false;
-      setIsSettling(false);
-      setExitStartX(startX);
-      setExitStartRot(startRot);
-      setExitDir(direction);
-      // Failsafe: if the CSS animationend event never fires for any reason
-      // (heavy main-thread work, a video that failed to load, etc.), force
-      // the exit to complete anyway so the buttons never stay stuck disabled.
-      window.setTimeout(() => {
-        handleExitAnimationEndRef.current();
-      }, 600);
+      runExit(direction, startX, startRot);
     },
-    [queue.length, isProcessing, exitDir, loadingPreview],
+    [queue.length, isProcessing, exitDir, loadingPreview, runExit],
   );
 
   // --- Called once the CSS exit animation finishes: commit the real
@@ -825,6 +879,7 @@ function App() {
     setTrayOpen(false);
     previewCache.current.clear();
     prefetchGeneration.current++; // hentikan prefetch massal dari sesi sebelumnya
+    setPrepareProgress({ done: 0, total: 0 });
     if (immersive) toggleImmersive();
   };
 
@@ -912,6 +967,30 @@ function App() {
             <kbd>F</kbd> layar penuh
           </span>
         </div>
+      </div>
+    );
+  }
+
+  if (stage === "preparing") {
+    const total = prepareProgress.total;
+    const pct = total ? Math.round((prepareProgress.done / total) * 100) : 0;
+    return (
+      <div className="container done-screen">
+        {ToastStack}
+        <span className="brand-mark">Selecta</span>
+        <h1>Menyiapkan foto…</h1>
+        <div className="done-ring">
+          <RollDial progress={pct} size={188} />
+          <div className="done-ring-label">
+            <span className="done-ring-pct mono">{pct}%</span>
+            <span className="done-ring-sub">siap</span>
+          </div>
+        </div>
+        <p className="done-tally">
+          <span className="stat-value">{prepareProgress.done}</span> dari{" "}
+          {total} preview siap
+        </p>
+        <p className="done-path mono">Mohon tunggu sebentar…</p>
       </div>
     );
   }
